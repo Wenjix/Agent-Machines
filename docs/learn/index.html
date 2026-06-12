@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How Agent Machines Works — an interactive field manual</title>
+<meta name="description" content="A nine-chapter interactive explanation of the Agent Machines architecture: dual routing, the MachineProvider interface, the bootstrap lifecycle, and the serverless browser-terminal inversion.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230b0d11'/%3E%3Cpath d='M8 3v10M3 8h10' stroke='%23ffa94d' stroke-width='1.6'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=Spline+Sans+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<nav class="rail" aria-label="Chapters">
+  <div class="rail-brand">agent machines<br><strong>field manual</strong></div>
+  <a class="toc" href="#ch0"><span class="n">00</span>The premise</a>
+  <a class="toc" href="#ch1"><span class="n">01</span>Dual routing</a>
+  <a class="toc" href="#ch2"><span class="n">02</span>The worker</a>
+  <a class="toc" href="#ch3"><span class="n">03</span>One interface</a>
+  <a class="toc" href="#ch4"><span class="n">04</span>The lifecycle</a>
+  <a class="toc" href="#ch5"><span class="n">05</span>The inversion ★</a>
+  <a class="toc" href="#ch6"><span class="n">06</span>The control plane</a>
+  <a class="toc" href="#ch7"><span class="n">07</span>War stories</a>
+  <a class="toc" href="#ch8"><span class="n">08</span>Check yourself</a>
+  <div class="rail-foot">keys: ← → page chapters<br>progress saved locally<br>~25 min total</div>
+</nav>
+
+<main>
+
+<header class="hero">
+  <span class="kicker">an interactive field manual · 9 chapters</span>
+  <h1>How <em>Agent Machines</em> actually works</h1>
+  <p class="sub">Most AI products are a chat window: ask, answer, close the tab, everything resets.
+  This codebase ships something else — a <strong>persistent worker on a real computer</strong>, deployed in
+  one click onto whichever cloud and with whichever agent brain you choose. This manual teaches the
+  system the way an architect would whiteboard it: each chapter is one idea, the trade-off that forced
+  it, and a simulation you can poke.</p>
+  <div class="hero-meta">
+    <div><b>The claim</b>OpenRouter for agents &amp; containers</div>
+    <div><b>The stack</b>Next.js control plane · 4 substrates · 4 runtimes</div>
+    <div><b>The sources</b>this repo's own docs, postmortems &amp; knowledge graph</div>
+  </div>
+</header>
+
+<!-- ──────────────────────────── 00 ──────────────────────────── -->
+<section class="chapter" id="ch0">
+  <div class="ch-head"><span class="ch-num">00</span>
+    <div class="ch-kicker rv">chapter 00 · the premise</div>
+    <h2 class="rv">Renting a worker, not a conversation</h2>
+  </div>
+  <p class="rv">Start with the problem statement from the project's own vision doc: <em>“People don't
+  want a bare sandbox. They want a worker that audits code, runs on a schedule, and gets smarter over
+  time.”</em> A chat product forgets you when the tab closes. A bare sandbox is an empty Linux box —
+  powerful, and useless until an expert moves in. Agent Machines is the layer between: it deploys the
+  employee, not the desk.</p>
+  <p class="rv">The mental model the explainer uses: the difference between <em>texting a smart friend
+  once</em> and <em>hiring an employee who has a desk, a login, a to-do list, and keeps working when you
+  are not watching</em>. The product is everything that turns a rented computer into that employee.</p>
+  <div class="law rv"><span class="t">first principle</span>
+    The value is not the model. It's the <strong>plumbing</strong>: bootstrapping agents on arbitrary
+    clouds, keeping keys sane, streaming live terminals through hosting never designed for it — built
+    once, as the product.</div>
+  <div class="sim rv"><div class="sim-bar"><span class="dot"></span>compare the two rentals</div>
+    <div class="sim-body">
+      <div class="compare">
+        <div class="col"><h4>a chat tab</h4><ul>
+          <li>resets when closed — no memory of the work</li>
+          <li>no disk, no schedules, no real tools</li>
+          <li>procedures can't accumulate or be exported</li>
+          <li>one vendor's UI, one vendor's cloud</li>
+        </ul></div>
+        <div class="col win"><h4>an agent machine</h4><ul>
+          <li>persistent Linux box — files, memory, identity survive sleep</li>
+          <li>cron schedules, 161 skills, 30+ integrations, a browser</li>
+          <li>every solved task can become a SKILL.md playbook on disk</li>
+          <li>pick the brain <em>and</em> the cloud; swap either later</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot-where"><b>where it lives</b> · knowledge/VISION.md · knowledge/AGENT-MACHINES-EXPLAINER.md</div>
+</section>
+
+<!-- ──────────────────────────── 01 ──────────────────────────── -->
+<section class="chapter" id="ch1">
+  <div class="ch-head"><span class="ch-num">01</span>
+    <div class="ch-kicker rv">chapter 01 · the core idea</div>
+    <h2 class="rv">Dual routing: two axes, zero lock-in</h2>
+  </div>
+  <p class="rv">Every competitor makes you choose a cage: <em>their</em> runtime or <em>their</em> cloud.
+  The core architectural bet here is that both choices are <strong>routing decisions</strong>, made
+  independently, at deploy time. One axis picks the brain — Hermes, OpenClaw, Claude Code, or Codex.
+  The other picks the floor it stands on — Dedalus, E2B, Sprites.dev, or Vercel Sandbox.</p>
+  <p class="rv">The analogy the repo leads with: <em>OpenRouter for agents and containers</em> — one
+  account routes which runtime and which substrate the way OpenRouter routes models. The companion
+  analogy is <em>“Vercel on AWS”</em>: be the product layer; treat infrastructure as interchangeable.
+  Even the best-performing substrate (Dedalus, ~250ms boots) is explicitly “a competitive default,
+  <strong>not the product</strong>.”</p>
+  <div class="law rv"><span class="t">why two axes is defensible</span>
+    Lock-in on either axis is a moat someone else owns. Routing both keeps the value in what this repo
+    builds: the harness, the control plane, and observation.</div>
+  <div class="sim rv"><div class="sim-bar"><span class="dot"></span>routing matrix — pick any pair</div>
+    <div class="sim-body" data-sim="matrix"></div>
+  </div>
+  <div class="foot-where"><b>where it lives</b> · knowledge/VISION.md (“dual routing”) · README.md provider matrix</div>
+</section>
+
+<!-- ──────────────────────────── 02 ──────────────────────────── -->
+<section class="chapter" id="ch2">
+  <div class="ch-head"><span class="ch-num">02</span>
+    <div class="ch-kicker rv">chapter 02 · the unit of deployment</div>
+    <h2 class="rv">The worker: one deployable unit</h2>
+  </div>
+  <p class="rv">What actually lands on the box is not “an agent.” It is a <strong>composed unit</strong>:
+  runtime + skills + MCP servers + integrations + cron + observation, assembled at bootstrap into the
+  worker's home directory, <code>~/.agent-machines/</code>. That home is the worker's identity — it's
+  what persists through sleep, and what makes the machine <em>this</em> employee rather than a blank box.</p>
+  <p class="rv">The capability surface is deliberately a <strong>registry-driven harness with six
+  layers</strong>, not a hardcoded tool list. Click each layer below. The strategic one is L1: skills are
+  procedures on disk, so they <em>compound</em> — the vision doc's argument for why you can't get this
+  from a chat product is that “custom playbooks stack up and cannot be exported.”</p>
+  <div class="sim rv"><div class="sim-bar"><span class="dot"></span>the six-layer harness</div>
+    <div class="sim-body" data-sim="stack"></div>
+  </div>
+  <div class="foot-where"><b>where it lives</b> · knowledge/MEMORY.md (harness) · knowledge/mcps/README.md (tiers) · web/lib/platform/harness.ts</div>
+</section>
+
+<!-- ──────────────────────────── 03 ──────────────────────────── -->
+<section class="chapter" id="ch3">
+  <div class="ch-head"><span class="ch-num">03</span>
+    <div class="ch-kicker rv">chapter 03 · the core abstraction</div>
+    <h2 class="rv">One interface, four floors</h2>
+  </div>
+  <p class="rv">Here is the classic computer-science move that makes dual routing real: every substrate
+  hides behind one interface, <code>MachineProvider</code>, with seven methods —
+  <code>provision</code> / <code>state</code> / <code>wake</code> / <code>sleep</code> /
+  <code>destroy</code> / <code>exec</code> / <code>streamExec</code>. The rest of the system —
+  dashboard, bootstrap, cron, terminal — is written against the interface and is therefore
+  <strong>provider-agnostic</strong>. Adding a fifth cloud means writing one adapter, not touching the product.</p>
+  <p class="rv">Two design subtleties worth teaching. First, <strong><code>exec</code> is the
+  load-bearing primitive</strong>: if a substrate can run a command, everything else can be built on top
+  of it. Second, capabilities are <strong>tiered, not assumed</strong>: where a provider has native
+  streaming the system uses it; where it doesn't (Dedalus), it degrades to polling — the UI works either way.</p>
+  <div class="law rv"><span class="t">interface as strategy</span>
+    Polymorphism is usually a code-hygiene argument. Here it is the business model: the interface is
+    what makes substrates interchangeable, and interchangeable substrates are what make the product the
+    layer that matters.</div>
+  <div class="sim rv"><div class="sim-bar"><span class="dot"></span>interface explorer — method × substrate</div>
+    <div class="sim-body" data-sim="iface"></div>
+  </div>
+  <div class="foot-where"><b>where it lives</b> · web/lib/providers/* (one file per substrate) · README.md “provider capability matrix”</div>
+</section>
+
+<!-- ──────────────────────────── 04 ──────────────────────────── -->
+<section class="chapter" id="ch4">
+  <div class="ch-head"><span class="ch-num">04</span>
+    <div class="ch-kicker rv">chapter 04 · the lifecycle</div>
+    <h2 class="rv">Deploy → Bootstrap → Attach → Talk</h2>
+  </div>
+  <p class="rv">The flagship flow turns “I want a worker” into a live terminal in roughly two and a half
+  minutes (a real measured bootstrap: ~151s). Step through it below — and then turn on the hazards,
+  because every phase carries a scar from a real failure. Three lifecycle principles to hold onto:</p>
+  <p class="rv"><strong>Fail closed at the gate.</strong> Deploy is blocked until substrate keys and the
+  model router are configured — provisioning must never silently half-succeed.
+  <strong>Define success by the health check.</strong> Bootstrap is “succeeded” the moment the gateway
+  URL answers <code>/v1/models</code> — not when the installer script says so; everything after runs
+  best-effort. <strong>Sleep is the economy.</strong> A parked worker costs no compute but keeps its
+  disk, skills and memory; wake re-verifies the gateway and repairs if the substrate reset anything.</p>
+  <div class="sim rv"><div class="sim-bar"><span class="dot"></span>lifecycle stepper — advance the phases</div>
+    <div class="sim-body" data-sim="pipeline"></div>
+  </div>
+  <div class="foot-where"><b>where it lives</b> · web/lib/bootstrap/ (runner, gateway-lifecycle, repair) · knowledge/FLEET-DASHBOARD-2026-05-22.md</div>
+</section>
+
+<!-- ──────────────────────────── 05 ──────────────────────────── -->
+<section class="chapter" id="ch5">
+  <div class="ch-head"><span class="ch-num">05</span>
+    <div class="ch-kicker rv">chapter 05 · the crown jewel</div>
+    <h2 class="rv">The inversion: a terminal where one cannot exist</h2>
+  </div>
+  <p class="rv">The best agent tools are full-screen terminal programs. Most people who'd benefit have
+  never opened a terminal. The obvious bridge — a browser terminal — has an obvious design: hold a
+  WebSocket open from browser through your API to a remote PTY, like SSH-in-a-tab. And on a serverless
+  control plane it <strong>cannot work</strong>: Vercel functions die at ~110 seconds, cold-start, and
+  have no sticky sessions. A phone call that must never hang up, routed through an operator who goes
+  home every two minutes.</p>
+  <p class="rv">The fix is the repo's signature idea — <strong>stateless courier, stateful worker</strong>.
+  Stop hosting the session in the API. The session lives <em>on the box</em>: a tmux session holds the
+  real PTY and scrollback. Input becomes a short HTTP POST that execs <code>tmux send-keys -H</code>
+  (hex bytes, serialized so keystrokes never reorder). Output becomes an unbuffered
+  <code>tail&nbsp;-f</code> on a pipe-pane log, streamed back over SSE. The dashboard is a dumb,
+  retryable courier — and the only substrate primitive required is <code>exec</code>, which is why the
+  same terminal works on all four clouds.</p>
+  <p class="rv">Type something below. Watch where your keystroke actually travels — then switch to the
+  naive design and watch it die at the wall.</p>
+  <div class="sim rv"><div class="sim-bar"><span class="dot"></span>packet flight — your keystroke's journey</div>
+    <div class="sim-body" data-sim="console"></div>
+  </div>
+  <div class="law rv"><span class="t">the transferable pattern</span>
+    “Serverless browser terminal” is a general solution any SaaS with remote workers could reuse — the
+    closest predecessor is AWS CloudShell, locked to one cloud. The missing primitive was never a better
+    chat UI; it was inverting where the session lives.</div>
+  <div class="foot-where"><b>where it lives</b> · knowledge/BROWSER-AGENT-CONSOLE.md · web/docs/sandbox-terminal-gateway.md · web/lib/dashboard/terminal-session.ts</div>
+</section>
+
+<!-- ──────────────────────────── 06 ──────────────────────────── -->
+<section class="chapter" id="ch6">
+  <div class="ch-head"><span class="ch-num">06</span>
+    <div class="ch-kicker rv">chapter 06 · operating the fleet</div>
+    <h2 class="rv">The control plane: six rooms, two audiences</h2>
+  </div>
+  <p class="rv">The dashboard is organized as six surfaces — explore them below. Two cross-cutting ideas
+  matter more than any single screen. <strong>Observation before orchestration</strong>: usage, cost,
+  activity and bootstrap phase are first-class, because you can only orchestrate what you can see.
+  And <strong>one identity gate</strong>: every dashboard API first resolves the effective user
+  (verified across 26 route handlers in this repo's knowledge graph) and fails closed with a 401 —
+  never a crash — when there isn't one.</p>
+  <p class="rv">The audiences are sequenced: <strong>humans first</strong> (route, provision, supervise
+  from the dashboard), <strong>agents second</strong> — the stated endgame is an MCP + CLI surface so a
+  head agent can provision, route, observe and tear down workers programmatically. The control plane
+  you're learning is designed to eventually be operated by the things it deploys.</p>
+  <div class="sim rv"><div class="sim-bar"><span class="dot"></span>surface map — click a room</div>
+    <div class="sim-body" data-sim="surfaces"></div>
+  </div>
+  <div class="foot-where"><b>where it lives</b> · web/app/dashboard/* · web/lib/user-config/identity.ts · docs/WHITEPAPER.md</div>
+</section>
+
+<!-- ──────────────────────────── 07 ──────────────────────────── -->
+<section class="chapter" id="ch7">
+  <div class="ch-head"><span class="ch-num">07</span>
+    <div class="ch-kicker rv">chapter 07 · engineering judgment</div>
+    <h2 class="rv">War stories: five bugs, five transferable laws</h2>
+  </div>
+  <p class="rv">This repo keeps honest postmortems, which makes it a rare teaching artifact: you can
+  watch architecture lessons get paid for. Each card below is a real symptom from the live-fire QA
+  sessions. <strong>Commit to a prediction before you reveal</strong> — that's the point of the exercise.</p>
+  <div class="sim rv"><div class="sim-bar"><span class="dot"></span>predict the root cause</div>
+    <div class="sim-body" data-sim="wars"></div>
+  </div>
+  <div class="foot-where"><b>where it lives</b> · knowledge/POSTMORTEM-2026-05-18-live-fire-qa.md · knowledge/FLEET-DASHBOARD-2026-05-22.md</div>
+</section>
+
+<!-- ──────────────────────────── 08 ──────────────────────────── -->
+<section class="chapter" id="ch8">
+  <div class="ch-head"><span class="ch-num">08</span>
+    <div class="ch-kicker rv">chapter 08 · synthesis</div>
+    <h2 class="rv">Check yourself</h2>
+  </div>
+  <p class="rv">Ten questions, instant feedback, explanations that point back at the chapters. 8/10 or
+  better and you can credibly whiteboard this system.</p>
+  <div class="sim rv"><div class="sim-bar"><span class="dot"></span>final · 10 questions</div>
+    <div class="sim-body" data-quiz></div>
+  </div>
+  <div class="whiteboard rv"><span class="t">The whiteboard test</span>
+    Close this tab and draw the system from memory: two routing axes feeding one
+    <code>MachineProvider</code> interface; a bootstrap pipeline whose success is defined by a gateway
+    health check; a worker whose home directory survives sleep; and a browser terminal built from
+    nothing but <code>exec</code>, because the session lives on the box and the control plane is just a
+    courier. If you can also say <em>why</em> each piece had to be that way — you've got it.</div>
+</section>
+
+<footer>
+  built as a teaching artifact from the repo's own sources: knowledge/VISION.md ·
+  knowledge/BROWSER-AGENT-CONSOLE.md · knowledge/MEMORY.md · postmortems · docs/WHITEPAPER.md ·
+  the graphify knowledge graph (3,397 nodes / 146 communities).<br>
+  zero dependencies · works from file:// · progress stays in your browser.
+</footer>
+
+</main>
+
+<script src="data.js"></script>
+<script src="sims.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

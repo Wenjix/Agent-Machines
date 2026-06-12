@@ -18,3 +18,6 @@ knowledge/YC-PARTNER-PREP.md
 
 # Playwright MCP scratch output (screenshots, snapshots, console logs)
 .playwright-mcp/
+
+# graphify knowledge-graph output (rebuildable via /graphify)
+graphify-out/
