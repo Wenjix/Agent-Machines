@@ -37,6 +37,13 @@ export function DeployAndTalk() {
 	const [aiConfigured, setAiConfigured] = useState<Record<string, boolean> | null>(null);
 	const [providerConfigured, setProviderConfigured] = useState<Record<string, boolean> | null>(null);
 	const [gatewayProfileId, setGatewayProfileId] = useState<string>(DEFAULT_ROUTER_ID);
+	const [recommended, setRecommended] = useState<{
+		substrate: string;
+		runtime: string;
+		model: string;
+		routerId: string | null;
+	} | null>(null);
+	const [model, setModel] = useState<string | null>(null);
 	const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
 	const busy = phase === "provisioning" || phase === "bootstrapping";
@@ -57,6 +64,28 @@ export function DeployAndTalk() {
 				const pconf: Record<string, boolean> = {};
 				for (const k of Object.keys(provs)) pconf[k] = Boolean(provs[k]?.configured);
 				setProviderConfigured(pconf);
+			})
+			.catch(() => {});
+		return () => {
+			alive = false;
+		};
+	}, []);
+
+	// Loop A: greedy routing recommendation (advisory — recommend-then-confirm).
+	useEffect(() => {
+		let alive = true;
+		void fetch("/api/dashboard/admin/route-recommendation")
+			.then((r) => (r.ok ? r.json() : null))
+			.then((j) => {
+				if (!alive || !j?.recommended) return;
+				setRecommended(
+					j.recommended as {
+						substrate: string;
+						runtime: string;
+						model: string;
+						routerId: string | null;
+					},
+				);
 			})
 			.catch(() => {});
 		return () => {
@@ -85,6 +114,7 @@ export function DeployAndTalk() {
 					providerKind: provider,
 					agentKind: agent,
 					force: true,
+					...(model ? { model } : {}),
 					...(agentUsesRouter(agent) && gatewayProfileId ? { gatewayProfileId } : {}),
 				}),
 			});
@@ -134,7 +164,19 @@ export function DeployAndTalk() {
 			setPhase("error");
 			setDetail(err instanceof Error ? err.message : "deploy failed");
 		}
-	}, [provider, agent, router, gatewayProfileId, blocked]);
+	}, [provider, agent, model, router, gatewayProfileId, blocked]);
+
+	const applyRecommendation = useCallback(() => {
+		if (!recommended) return;
+		if ((PROVIDERS as ReadonlyArray<string>).includes(recommended.substrate)) {
+			setProvider(recommended.substrate as (typeof PROVIDERS)[number]);
+		}
+		if ((AGENTS as ReadonlyArray<string>).includes(recommended.runtime)) {
+			setAgent(recommended.runtime as (typeof AGENTS)[number]);
+		}
+		setModel(recommended.model);
+		if (recommended.routerId) setGatewayProfileId(recommended.routerId);
+	}, [recommended]);
 
 	return (
 		<div className="grid gap-3 border border-[var(--ret-border)] bg-[var(--ret-bg)] p-4">
@@ -185,6 +227,23 @@ export function DeployAndTalk() {
 				aiConfigured={aiConfigured ?? {}}
 				disabled={busy}
 			/>
+
+			{recommended &&
+			(recommended.substrate !== provider || recommended.runtime !== agent) ? (
+				<div className="flex items-center justify-between gap-2 border border-[var(--ret-border)] bg-[var(--ret-bg)] px-3 py-2">
+					<span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--ret-text-muted)]">
+						learned routing suggests {recommended.substrate} · {recommended.runtime} · {recommended.model}
+					</span>
+					<button
+						type="button"
+						onClick={applyRecommendation}
+						disabled={busy}
+						className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--ret-purple)] underline disabled:opacity-50"
+					>
+						use
+					</button>
+				</div>
+			) : null}
 
 			<div className="grid gap-3 md:grid-cols-2">
 				<AgentInfoPanel agentKind={agent} readiness={readiness ?? undefined} />
