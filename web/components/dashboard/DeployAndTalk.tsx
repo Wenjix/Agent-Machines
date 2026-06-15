@@ -175,7 +175,9 @@ export function DeployAndTalk() {
 			setAgent(recommended.runtime as (typeof AGENTS)[number]);
 		}
 		setModel(recommended.model);
-		if (recommended.routerId) setGatewayProfileId(recommended.routerId);
+		// Sync the router fully to the recommendation — including clearing a stale
+		// preset back to default when the recommended arm has no router (routerId null).
+		setGatewayProfileId(recommended.routerId ?? DEFAULT_ROUTER_ID);
 	}, [recommended]);
 
 	return (
@@ -193,7 +195,10 @@ export function DeployAndTalk() {
 					<ReticleSelect
 						ariaLabel="substrate"
 						value={provider}
-						onChange={(v) => setProvider(v as (typeof PROVIDERS)[number])}
+						onChange={(v) => {
+							setProvider(v as (typeof PROVIDERS)[number]);
+							setModel(null);
+						}}
 						options={PROVIDERS.map((p) => ({ value: p, label: p }))}
 					/>
 				</label>
@@ -202,7 +207,10 @@ export function DeployAndTalk() {
 					<ReticleSelect
 						ariaLabel="agent"
 						value={agent}
-						onChange={(v) => setAgent(v as (typeof AGENTS)[number])}
+						onChange={(v) => {
+							setAgent(v as (typeof AGENTS)[number]);
+							setModel(null);
+						}}
 						options={AGENTS.map((a) => ({ value: a, label: a }))}
 					/>
 				</label>
@@ -229,7 +237,10 @@ export function DeployAndTalk() {
 			/>
 
 			{recommended &&
-			(recommended.substrate !== provider || recommended.runtime !== agent) ? (
+			(recommended.substrate !== provider ||
+				recommended.runtime !== agent ||
+				recommended.model !== model ||
+				(recommended.routerId ?? DEFAULT_ROUTER_ID) !== gatewayProfileId) ? (
 				<div className="flex items-center justify-between gap-2 border border-[var(--ret-border)] bg-[var(--ret-bg)] px-3 py-2">
 					<span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--ret-text-muted)]">
 						learned routing suggests {recommended.substrate} · {recommended.runtime} · {recommended.model}

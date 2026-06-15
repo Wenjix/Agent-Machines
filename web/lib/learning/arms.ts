@@ -29,6 +29,11 @@ import type { Arm } from "@/lib/learning/types";
  * list, not the full catalog, which would keep cells sparse forever). These are
  * a tunable seed; the bandit learns to avoid weak ones. Router agents use
  * namespaced ids; native agents use the provider's own ids.
+ *
+ * TODO(PR#1 review c7): these ids are not validated against any live provider
+ * catalog — an unknown id provisions fine (stored on MachineRef) but fails at
+ * inference. Validate against the provider's model list (or a strict per-runtime
+ * allowlist) before a recommended model reaches provisioning.
  */
 export const CURATED_MODELS: Record<AgentKind, string[]> = {
 	hermes: ["anthropic/claude-sonnet-4-6", "anthropic/claude-opus-4-8", "openai/gpt-5.1"],

@@ -15,38 +15,24 @@ import { buildPool, type Pool } from "@/lib/dashboard/pool";
 import { estimateCost } from "@/lib/metrics/cost";
 import { getProvider } from "@/lib/providers";
 import { bundleForMachine, computeLoadoutHash } from "@/lib/learning/loadout-hash";
+import { parseRunLog } from "@/lib/learning/run-log";
 import { deriveTaskClass } from "@/lib/learning/task-class";
 import { emitRunTraces } from "@/lib/learning/trace";
 import type { RunTrace } from "@/lib/learning/types";
-import type { CronEntry, MachineRef, UserConfig } from "@/lib/user-config/schema";
+import type {
+	AgentKind,
+	CronEntry,
+	MachineRef,
+	ProviderKind,
+	UserConfig,
+} from "@/lib/user-config/schema";
 
 const RUN_LOG = "$HOME/.agent-machines/cron/runs.jsonl";
 const TAIL_LINES = 100;
 const EXEC_TIMEOUT_MS = 15_000;
-
-type RunLogEntry = { id: string; startedAt: string; finishedAt: string; exitCode: number };
-
-function parseRunLog(stdout: string): RunLogEntry[] {
-	const out: RunLogEntry[] = [];
-	for (const line of stdout.split("\n")) {
-		const trimmed = line.trim();
-		if (!trimmed.startsWith("{")) continue;
-		try {
-			const o = JSON.parse(trimmed) as Partial<RunLogEntry>;
-			if (
-				typeof o.id === "string" &&
-				typeof o.startedAt === "string" &&
-				typeof o.finishedAt === "string" &&
-				typeof o.exitCode === "number"
-			) {
-				out.push({ id: o.id, startedAt: o.startedAt, finishedAt: o.finishedAt, exitCode: o.exitCode });
-			}
-		} catch {
-			// skip malformed line
-		}
-	}
-	return out;
-}
+/** Bounded concurrency + wall-clock budget so ingest can't blow the tick's maxDuration. */
+const INGEST_BUDGET_MS = 30_000;
+const INGEST_CONCURRENCY = 4;
 
 function tenantHash(userId: string): string {
 	return createHash("sha256").update(userId).digest("hex").slice(0, 16);
@@ -68,6 +54,9 @@ async function ingestMachine(
 	const entries = parseRunLog(res.stdout);
 	if (entries.length === 0) return 0;
 
+	// loadout_hash is best-effort current-config: the run log carries the routing
+	// arm but not the resolved ability set, so this can drift if the loadout
+	// changed since the run. The bandit arm itself comes from the embedded snapshot.
 	const loadoutHash = computeLoadoutHash(bundleForMachine(config, machine.id), pool);
 	const th = tenantHash(userId);
 	const traces: RunTrace[] = entries.map((e) => {
@@ -88,10 +77,13 @@ async function ingestMachine(
 			runId: `${machine.id}:${e.id}:${e.finishedAt}`,
 			source: "cron",
 			taskClass: cron ? deriveTaskClass(cron) : "unknown",
-			runtime: machine.agentKind,
-			substrate: machine.providerKind,
-			model: machine.model,
-			routerId: machine.gatewayProfileId,
+			// Prefer the arm snapshot embedded at dispatch; fall back to the machine's
+			// current config only for legacy lines that predate the snapshot.
+			runtime: e.runtime ? (e.runtime as AgentKind) : machine.agentKind,
+			substrate: e.substrate ? (e.substrate as ProviderKind) : machine.providerKind,
+			model: e.model ?? machine.model,
+			routerId:
+				e.router !== undefined ? (e.router === "" ? null : e.router) : machine.gatewayProfileId,
 			loadoutHash,
 			memoryBundleId: null,
 			tenantHash: th,
@@ -114,16 +106,24 @@ export async function ingestRunTracesForUser(userId: string, config: UserConfig)
 	if (crons.length === 0) return 0;
 	const cronsById = new Map(crons.map((c) => [c.id, c]));
 	const machineIds = new Set(crons.map((c) => c.machineId));
+	const machines = [...machineIds]
+		.map((id) => config.machines.find((m) => m.id === id && !m.archived))
+		.filter((m): m is MachineRef => Boolean(m));
+	if (machines.length === 0) return 0;
 	const pool = buildPool(config);
+	const deadline = Date.now() + INGEST_BUDGET_MS;
 	let total = 0;
-	for (const machineId of machineIds) {
-		const machine = config.machines.find((m) => m.id === machineId && !m.archived);
-		if (!machine) continue;
-		try {
-			total += await ingestMachine(userId, config, machine, cronsById, pool);
-		} catch {
-			// machine offline / exec failed / parse error — skip, retry next tick
-		}
+	// Bounded concurrency + a wall-clock budget so a fleet of cron machines can
+	// never push the tick past its maxDuration. Machines skipped this tick are
+	// picked up on the next one (ingest is idempotent on run_id).
+	for (let i = 0; i < machines.length && Date.now() < deadline; i += INGEST_CONCURRENCY) {
+		const batch = machines.slice(i, i + INGEST_CONCURRENCY);
+		const counts = await Promise.all(
+			batch.map((machine) =>
+				ingestMachine(userId, config, machine, cronsById, pool).catch(() => 0),
+			),
+		);
+		for (const c of counts) total += c;
 	}
 	return total;
 }

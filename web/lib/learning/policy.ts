@@ -124,7 +124,9 @@ export async function recomputePolicy(): Promise<{ version: number; nTraces: num
 		.maybeSingle();
 	const version = ((verRow?.version as number | undefined) ?? 0) + 1;
 
-	await sb.from("routing_policy").update({ active: false }).eq("active", true);
+	// Insert the new active snapshot FIRST, then deactivate the prior ones, so a
+	// failed insert can never leave zero active policies (readActivePolicy would
+	// otherwise return null and routing would fall back to uninformed priors).
 	const { error: insErr } = await sb.from("routing_policy").insert({
 		version,
 		weights,
@@ -133,6 +135,13 @@ export async function recomputePolicy(): Promise<{ version: number; nTraces: num
 		active: true,
 	});
 	if (insErr) throw new Error(`recomputePolicy write: ${insErr.message}`);
+
+	const { error: deErr } = await sb
+		.from("routing_policy")
+		.update({ active: false })
+		.eq("active", true)
+		.neq("version", version);
+	if (deErr) console.error(`recomputePolicy deactivate prior failed: ${deErr.message}`);
 
 	return { version, nTraces: traces.length };
 }
