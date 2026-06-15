@@ -9,10 +9,12 @@ describe("parseRunLog", () => {
 			startedAt: "2026-06-15T00:00:00Z",
 			finishedAt: "2026-06-15T00:00:05Z",
 			exitCode: 0,
-			runtime: "hermes",
-			substrate: "e2b",
-			model: "anthropic/claude-sonnet-4-6",
-			router: "dedalus-default",
+			arm: {
+				runtime: "hermes",
+				substrate: "e2b",
+				model: "anthropic/claude-sonnet-4-6",
+				router: "dedalus-default",
+			},
 		});
 		const [e] = parseRunLog(line);
 		expect(e.exitCode).toBe(0);
@@ -22,27 +24,53 @@ describe("parseRunLog", () => {
 		expect(e.router).toBe("dedalus-default");
 	});
 
-	it("leaves arm fields undefined on legacy lines", () => {
-		const line =
-			'{"id":"c2","startedAt":"2026-06-15T00:00:00Z","finishedAt":"2026-06-15T00:00:01Z","exitCode":1}';
+	it("represents a null router (native/default) distinctly from absent", () => {
+		const line = JSON.stringify({
+			id: "c2",
+			startedAt: "t",
+			finishedAt: "t",
+			exitCode: 0,
+			arm: { runtime: "codex", substrate: "e2b", model: "gpt-5.1", router: null },
+		});
+		const [e] = parseRunLog(line);
+		expect(e.runtime).toBe("codex");
+		expect(e.router).toBeNull();
+	});
+
+	it("leaves arm fields undefined on legacy lines (no arm object)", () => {
+		const line = '{"id":"c3","startedAt":"t","finishedAt":"t","exitCode":1}';
 		const [e] = parseRunLog(line);
 		expect(e.exitCode).toBe(1);
 		expect(e.runtime).toBeUndefined();
 		expect(e.router).toBeUndefined();
 	});
 
-	it("preserves an empty-string router (null sentinel) distinct from absent", () => {
-		const line = JSON.stringify({ id: "c3", startedAt: "t", finishedAt: "t", exitCode: 0, router: "" });
+	it("treats an empty arm object (decode-failure fallback) as full fallback", () => {
+		const line = '{"id":"c4","startedAt":"t","finishedAt":"t","exitCode":0,"arm":{}}';
 		const [e] = parseRunLog(line);
-		expect(e.router).toBe("");
+		expect(e.runtime).toBeUndefined();
+		expect(e.router).toBeUndefined();
+	});
+
+	it("round-trips a model id with quotes/backslashes (JSON-safe embedding)", () => {
+		const weird = 'weird"/\\model';
+		const line = JSON.stringify({
+			id: "c5",
+			startedAt: "t",
+			finishedAt: "t",
+			exitCode: 0,
+			arm: { runtime: "hermes", substrate: "e2b", model: weird, router: null },
+		});
+		const [e] = parseRunLog(line);
+		expect(e.model).toBe(weird);
 	});
 
 	it("skips malformed and non-object lines", () => {
 		const out = parseRunLog(
-			'not json\n{"id":"c4","startedAt":"t","finishedAt":"t","exitCode":0}\n{bad',
+			'not json\n{"id":"c6","startedAt":"t","finishedAt":"t","exitCode":0}\n{bad',
 		);
 		expect(out).toHaveLength(1);
-		expect(out[0].id).toBe("c4");
+		expect(out[0].id).toBe("c6");
 	});
 
 	it("drops entries missing a required field", () => {

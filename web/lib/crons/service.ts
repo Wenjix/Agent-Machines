@@ -47,21 +47,33 @@ export function listDueCrons(config: UserConfig, nowMs: number): CronEntry[] {
  */
 export function buildCronCommand(cron: CronEntry, machine: MachineRef): string {
 	const promptB64 = Buffer.from(cron.prompt ?? "", "utf8").toString("base64");
+	// Embed the run-time routing arm so Loop 0 ingest attributes the outcome to the
+	// arm in effect when the cron ran (not the machine's later config). The arm is
+	// JSON-stringified (so model/router are properly escaped) and passed base64 —
+	// no machine-controlled value is ever interpolated into the shell, and the
+	// emitted run record can't be corrupted by quotes/metacharacters in a model id.
+	const armB64 = Buffer.from(
+		JSON.stringify({
+			runtime: machine.agentKind,
+			substrate: machine.providerKind,
+			model: machine.model,
+			router: machine.gatewayProfileId ?? null,
+		}),
+		"utf8",
+	).toString("base64");
 	const invocation =
 		agentOneShotInvocation(machine.agentKind) ??
 		'echo "no one-shot runner for this agent; prompt:"; echo "$AM_CRON_PROMPT"';
 	const logFile = `${RUN_DIR}/${cron.id}.last.log`;
-	// Embed the run-time routing arm (runtime/substrate/model/router) into the run
-	// record so Loop 0 ingest attributes the outcome to the arm in effect when the
-	// cron actually ran — not the machine's current (possibly later-changed) config.
 	return [
 		`mkdir -p "${RUN_DIR}"`,
 		`export AM_CRON_PROMPT="$(printf %s '${promptB64}' | base64 -d 2>/dev/null)"`,
+		`__am_arm="$(printf %s '${armB64}' | base64 -d 2>/dev/null || echo '{}')"`,
 		`__am_start=$(date -u +%Y-%m-%dT%H:%M:%SZ)`,
 		`( ${invocation} ) > "${logFile}" 2>&1`,
 		`__am_code=$?`,
 		`__am_end=$(date -u +%Y-%m-%dT%H:%M:%SZ)`,
-		`printf '{"id":"%s","startedAt":"%s","finishedAt":"%s","exitCode":%s,"runtime":"%s","substrate":"%s","model":"%s","router":"%s"}\\n' '${cron.id}' "$__am_start" "$__am_end" "$__am_code" '${machine.agentKind}' '${machine.providerKind}' '${machine.model}' '${machine.gatewayProfileId ?? ""}' >> "${RUN_LOG}"`,
+		`printf '{"id":"%s","startedAt":"%s","finishedAt":"%s","exitCode":%s,"arm":%s}\\n' '${cron.id}' "$__am_start" "$__am_end" "$__am_code" "$__am_arm" >> "${RUN_LOG}"`,
 		`echo "AM_CRON_EXIT:$__am_code"`,
 	].join("\n");
 }

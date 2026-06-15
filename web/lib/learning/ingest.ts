@@ -82,8 +82,7 @@ async function ingestMachine(
 			runtime: e.runtime ? (e.runtime as AgentKind) : machine.agentKind,
 			substrate: e.substrate ? (e.substrate as ProviderKind) : machine.providerKind,
 			model: e.model ?? machine.model,
-			routerId:
-				e.router !== undefined ? (e.router === "" ? null : e.router) : machine.gatewayProfileId,
+			routerId: e.router !== undefined ? e.router : machine.gatewayProfileId,
 			loadoutHash,
 			memoryBundleId: null,
 			tenantHash: th,

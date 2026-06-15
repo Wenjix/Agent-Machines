@@ -106,7 +106,20 @@ export async function POST(request: Request): Promise<Response> {
 	// recommend-then-confirm banner instead — so its behavior is unchanged. The
 	// credential gate below still hard-filters; the policy only chooses among
 	// feasible arms.
-	const rec = body.autoRoute === true ? await recommendArm(config).catch(() => null) : null;
+	// Condition the recommendation on whatever axes the caller fixed, so the
+	// omitted axes are filled from ONE coherent arm rather than mixing body axes
+	// with recommendation axes from a different best arm.
+	const explicitModel =
+		typeof body.model === "string" && body.model.trim().length > 0 ? body.model.trim() : undefined;
+	const rec =
+		body.autoRoute === true
+			? await recommendArm(config, {
+					runtime: isAgent(body.agentKind) ? body.agentKind : undefined,
+					substrate: isProvider(body.providerKind) ? body.providerKind : undefined,
+					model: explicitModel,
+					routerId: typeof body.gatewayProfileId === "string" ? body.gatewayProfileId : undefined,
+				}).catch(() => null)
+			: null;
 
 	const providerKind: ProviderKind = isProvider(body.providerKind)
 		? body.providerKind
@@ -115,10 +128,7 @@ export async function POST(request: Request): Promise<Response> {
 		? body.agentKind
 		: rec?.arm.runtime ?? config.draftAgentKind;
 	const spec = asSpec(body.spec, config.draftSpec ?? DEFAULT_MACHINE_SPEC);
-	const model =
-		typeof body.model === "string" && body.model.trim().length > 0
-			? body.model.trim()
-			: rec?.arm.model ?? config.draftModel;
+	const model = explicitModel ?? rec?.arm.model ?? config.draftModel;
 	const gatewayProfileId =
 		body.gatewayProfileId ??
 		(agentUsesRouter(agentKind) ? rec?.arm.routerId ?? null : null);

@@ -2,9 +2,11 @@
  * Parser for the on-box cron run log (~/.agent-machines/cron/runs.jsonl).
  *
  * Kept dependency-light (no catalog/Supabase imports) so it is unit-testable
- * without the generated data files. Newer lines carry a routing-arm snapshot
- * embedded at dispatch (see buildCronCommand); legacy/backfill lines have only
- * the exit metadata, in which case the arm fields are absent.
+ * without the generated data files. Newer lines carry a nested `arm` object —
+ * the routing arm snapshot embedded at dispatch (JSON-stringified + base64'd by
+ * buildCronCommand, so model/router values are safely escaped). Legacy/backfill
+ * lines have no `arm`, in which case the arm fields are left undefined and ingest
+ * falls back to the machine's current config.
  */
 
 export type RunLogEntry = {
@@ -12,12 +14,14 @@ export type RunLogEntry = {
 	startedAt: string;
 	finishedAt: string;
 	exitCode: number;
-	/** Routing-arm snapshot embedded at dispatch; absent on legacy/backfill lines. */
 	runtime?: string;
 	substrate?: string;
 	model?: string;
-	router?: string;
+	/** string = a router preset/profile id; null = native/default; undefined = no snapshot. */
+	router?: string | null;
 };
+
+type RawArm = { runtime?: unknown; substrate?: unknown; model?: unknown; router?: unknown };
 
 export function parseRunLog(stdout: string): RunLogEntry[] {
 	const out: RunLogEntry[] = [];
@@ -25,22 +29,35 @@ export function parseRunLog(stdout: string): RunLogEntry[] {
 		const trimmed = line.trim();
 		if (!trimmed.startsWith("{")) continue;
 		try {
-			const o = JSON.parse(trimmed) as Partial<RunLogEntry>;
+			const o = JSON.parse(trimmed) as {
+				id?: unknown;
+				startedAt?: unknown;
+				finishedAt?: unknown;
+				exitCode?: unknown;
+				arm?: unknown;
+			};
 			if (
 				typeof o.id === "string" &&
 				typeof o.startedAt === "string" &&
 				typeof o.finishedAt === "string" &&
 				typeof o.exitCode === "number"
 			) {
+				const arm = o.arm && typeof o.arm === "object" ? (o.arm as RawArm) : null;
 				out.push({
 					id: o.id,
 					startedAt: o.startedAt,
 					finishedAt: o.finishedAt,
 					exitCode: o.exitCode,
-					runtime: typeof o.runtime === "string" ? o.runtime : undefined,
-					substrate: typeof o.substrate === "string" ? o.substrate : undefined,
-					model: typeof o.model === "string" ? o.model : undefined,
-					router: typeof o.router === "string" ? o.router : undefined,
+					runtime: arm && typeof arm.runtime === "string" ? arm.runtime : undefined,
+					substrate: arm && typeof arm.substrate === "string" ? arm.substrate : undefined,
+					model: arm && typeof arm.model === "string" ? arm.model : undefined,
+					router: arm
+						? typeof arm.router === "string"
+							? arm.router
+							: arm.router === null
+								? null
+								: undefined
+						: undefined,
 				});
 			}
 		} catch {
