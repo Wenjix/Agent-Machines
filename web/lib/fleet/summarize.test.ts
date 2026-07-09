@@ -35,6 +35,13 @@ describe("summarizeFleet", () => {
 		expect(s.failed).toBe(3);
 	});
 
+	it("treats a failed boot as failed even when the probe still reports ready/starting", () => {
+		const s = summarizeFleet([ok("ready", "failed"), ok("starting", "failed")]);
+		expect(s.failed).toBe(2);
+		expect(s.running).toBe(0);
+		expect(s.booting).toBe(0);
+	});
+
 	it("empty fleet is all zeros", () => {
 		const s = summarizeFleet([]);
 		expect(s).toEqual({ total: 0, running: 0, booting: 0, sleeping: 0, failed: 0 });

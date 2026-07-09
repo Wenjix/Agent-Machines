@@ -19,7 +19,7 @@ export type FleetSummary = {
 	booting: number;
 	/** state === "sleeping". */
 	sleeping: number;
-	/** probe failed, errored, or destroying. */
+	/** probe failed, errored, destroying, or boot failed. */
 	failed: number;
 };
 
@@ -36,15 +36,18 @@ export function summarizeFleet(
 			continue;
 		}
 		const state = m.live.state;
-		const bootRunning = m.bootstrapState?.phase === "running";
-		if (state === "ready") {
+		const bootPhase = m.bootstrapState?.phase;
+		// Failure dominates (mirrors resolveVisualState): a failed boot counts as
+		// failed even when the live probe still reports ready/starting, so the hub
+		// and badges agree with the radial nodes' fault ring on the same page.
+		if (bootPhase === "failed" || state === "error" || state === "destroying") {
+			failed += 1;
+		} else if (state === "ready") {
 			running += 1;
-		} else if (state === "starting" || bootRunning) {
+		} else if (state === "starting" || bootPhase === "running") {
 			booting += 1;
 		} else if (state === "sleeping") {
 			sleeping += 1;
-		} else if (state === "error" || state === "destroying") {
-			failed += 1;
 		}
 	}
 	return { total: machines.length, running, booting, sleeping, failed };

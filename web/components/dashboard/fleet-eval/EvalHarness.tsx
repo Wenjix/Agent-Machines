@@ -53,6 +53,9 @@ export function EvalHarness({
 		const onKeyDown = (e: KeyboardEvent) => {
 			if (e.repeat) return;
 			if (isInteractive(e.target)) return;
+			// Let modifier chords (Cmd/Ctrl/Alt + key) fall through to the browser/OS —
+			// only bare (optionally Shift) keys are harness shortcuts.
+			if (e.metaKey || e.ctrlKey || e.altKey) return;
 			const action = keyToAction(e.key, { shift: e.shiftKey });
 			if (!action) return;
 			e.preventDefault();

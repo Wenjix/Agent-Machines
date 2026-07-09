@@ -20,7 +20,6 @@ import type { LogLine } from "@/lib/dashboard/types";
 import { fetchLogTail, headlineFromLogs, isFleetLogsLoaded, shouldFetchFleetLogs } from "@/lib/fleet/fetch-log-tail";
 import { useFleetLoadout } from "@/lib/fleet/use-fleet-loadout";
 import { useLiveLoads } from "@/lib/fleet/use-live-loads";
-import { EvalHarness } from "@/components/dashboard/fleet-eval/EvalHarness";
 import { useEvalMode } from "@/lib/fleet/eval/use-eval-mode";
 import { toFleetStreamCard } from "@/lib/fleet/view-model";
 import { cn } from "@/lib/cn";
@@ -55,6 +54,16 @@ const FleetDial = dynamic(
 			<div className="min-h-[clamp(440px,62vh,760px)] w-full border border-[var(--ret-border)]" />
 		),
 	},
+);
+
+/**
+ * The eval harness is a gated personal tool (?eval=1). Dynamic + ssr:false so the
+ * whole fleet-eval tree is only fetched when eval mode activates — kept out of the
+ * default MachinesPanel bundle for everyone else.
+ */
+const EvalHarness = dynamic(
+	() => import("@/components/dashboard/fleet-eval/EvalHarness").then((m) => m.EvalHarness),
+	{ ssr: false },
 );
 
 const TABLE_PHASE: Record<string, { label: string; dot: string; text: string }> = {
@@ -253,8 +262,11 @@ export function MachinesPanel() {
 		});
 
 	const renderStageExisting = () => {
-		if (loading && visible.length === 0) return null;
 		if (visible.length === 0) {
+			// Match the shipped path: only a truly empty fleet shows the empty shell.
+			// While loading, or when machines exist but are all archived (the archived
+			// section below carries them), don't flash a false "No machines yet".
+			if (loading || machines.length > 0) return null;
 			return (
 				<EmptyShell
 					title="No machines yet"
