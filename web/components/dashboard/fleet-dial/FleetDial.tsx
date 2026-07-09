@@ -85,6 +85,10 @@ export function FleetDial({
 	const focusTarget = hoveredId ?? focusedId;
 	const fisheyeNode = layout?.nodes.find((n) => n.id === focusTarget) ?? null;
 	const bootingNodes = layout?.nodes.filter((n) => n.visual.booting || n.visual.bootFailed) ?? [];
+	// A hidden keep-alive pane (active === false) freezes like reduced-motion: no
+	// node breathing, no boot-stream particles, no canvas RAF — only the shown pane
+	// animates. Without this, two off-screen dials keep their CSS loops running.
+	const frozen = reducedMotion || !active;
 
 	return (
 		<div
@@ -127,7 +131,7 @@ export function FleetDial({
 							cy={layout.cy}
 							hubRadius={layout.hubRadius}
 							skin={skin}
-							reducedMotion={reducedMotion}
+							reducedMotion={frozen}
 						/>
 					))}
 
@@ -137,7 +141,7 @@ export function FleetDial({
 							node={node}
 							skin={skin}
 							load={loadById?.[node.id]}
-							reducedMotion={reducedMotion}
+							reducedMotion={frozen}
 							focused={node.id === focusTarget}
 							onSelect={onSelect}
 							onHover={setHoveredId}
