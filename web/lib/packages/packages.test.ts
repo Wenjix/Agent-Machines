@@ -56,10 +56,12 @@ describe("matchPackages", () => {
 	});
 
 	it("does not suggest when all package abilities are already active in memory", () => {
+		const stripe = findPackage("stripe");
+		expect(stripe).toBeTruthy();
 		const stripeMemory = newBundle({
 			name: "pay",
-			skillIds: ["stripe-best-practices", "stripe-projects", "upgrade-stripe"],
-			mcpServerIds: ["stripe"],
+			skillIds: stripe!.skillIds,
+			mcpServerIds: stripe!.mcpServerIds,
 		});
 		const hits = matchPackages({
 			draft: "stripe invoice webhook",
