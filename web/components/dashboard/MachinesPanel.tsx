@@ -2,10 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { MachineFleetCard } from "@/components/dashboard/MachineFleetCard";
 import { FleetInteractPane } from "@/components/dashboard/FleetInteractPane";
+import {
+	FleetModeToggle,
+	type FleetMode,
+} from "@/components/dashboard/fleet-dial/FleetModeToggle";
 import { DashboardPageBody } from "@/components/dashboard/DashboardPageBody";
 import { ReticleButton } from "@/components/reticle/ReticleButton";
 import { ReticleFrame } from "@/components/reticle/ReticleFrame";
@@ -14,6 +19,7 @@ import { SchematicPanel } from "@/components/reticle/SchematicPanel";
 import type { LogLine } from "@/lib/dashboard/types";
 import { fetchLogTail, headlineFromLogs, isFleetLogsLoaded, shouldFetchFleetLogs } from "@/lib/fleet/fetch-log-tail";
 import { useFleetLoadout } from "@/lib/fleet/use-fleet-loadout";
+import { useLiveLoads } from "@/lib/fleet/use-live-loads";
 import { toFleetStreamCard } from "@/lib/fleet/view-model";
 import { cn } from "@/lib/cn";
 import type { ProviderCapabilities } from "@/lib/providers";
@@ -30,8 +36,24 @@ import {
 
 const POLL_MS = 5000;
 const VIEW_STORAGE_KEY = "am-fleet-view";
+const MODE_STORAGE_KEY = "am-fleet-mode";
 
 type FleetView = "cards" | "table";
+
+/**
+ * The radial dial touches canvas / ResizeObserver / matchMedia, so it must not
+ * server-render. Dynamic + ssr:false with a height-reserving placeholder keeps
+ * first paint deterministic (no hydration mismatch, no layout shift).
+ */
+const FleetDial = dynamic(
+	() => import("@/components/dashboard/fleet-dial/FleetDial").then((m) => m.FleetDial),
+	{
+		ssr: false,
+		loading: () => (
+			<div className="min-h-[clamp(440px,62vh,760px)] w-full border border-[var(--ret-border)]" />
+		),
+	},
+);
 
 const TABLE_PHASE: Record<string, { label: string; dot: string; text: string }> = {
 	ready: { label: "Running", dot: "bg-[var(--ret-green)]", text: "text-[var(--ret-green)]" },
@@ -80,17 +102,36 @@ export function MachinesPanel() {
 	const [editing, setEditing] = useState<string | null>(null);
 	const [showProvision, setShowProvision] = useState(false);
 	const [view, setView] = useState<FleetView>("cards");
+	// Flagship 3-way: existing | synthesis | organism. Default existing so first
+	// paint matches the user's current world (no hydration surprise).
+	const [mode, setMode] = useState<FleetMode>("existing");
 	const loadout = useFleetLoadout();
+	// Live per-machine CPU load (0..1) drives the dial's breathing. Only polled
+	// while a radial mode is on screen; degrades to a calm baseline when absent.
+	const loadById = useLiveLoads(mode !== "existing");
 
 	useEffect(() => {
 		const saved = window.localStorage.getItem(VIEW_STORAGE_KEY);
 		if (saved === "cards" || saved === "table") setView(saved);
+		const savedMode = window.localStorage.getItem(MODE_STORAGE_KEY);
+		if (savedMode === "existing" || savedMode === "synthesis" || savedMode === "organism") {
+			setMode(savedMode);
+		}
 	}, []);
 
 	const selectView = useCallback((next: FleetView) => {
 		setView(next);
 		try {
 			window.localStorage.setItem(VIEW_STORAGE_KEY, next);
+		} catch {
+			// storage unavailable; in-memory toggle still works
+		}
+	}, []);
+
+	const selectMode = useCallback((next: FleetMode) => {
+		setMode(next);
+		try {
+			window.localStorage.setItem(MODE_STORAGE_KEY, next);
 		} catch {
 			// storage unavailable; in-memory toggle still works
 		}
@@ -202,11 +243,14 @@ export function MachinesPanel() {
 			{/* Quick provision controls */}
 			{!loading ? (
 				<div className="flex flex-wrap items-center justify-between gap-2">
-					<div className="flex items-center gap-3">
+					<div className="flex flex-wrap items-center gap-3">
 						<h2 className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--ret-text-muted)]">
 							Fleet
 						</h2>
-						<ViewToggle view={view} onChange={selectView} />
+						<FleetModeToggle mode={mode} onChange={selectMode} />
+						{mode === "existing" ? (
+							<ViewToggle view={view} onChange={selectView} />
+						) : null}
 					</div>
 					<div className="flex items-center gap-2">
 						<ReticleButton
@@ -239,7 +283,7 @@ export function MachinesPanel() {
 				/>
 			) : null}
 
-			{!loading && machines.length === 0 && !showProvision ? (
+			{mode === "existing" && !loading && machines.length === 0 && !showProvision ? (
 				<EmptyShell
 					title="No machines yet"
 					body="Click '+ New machine' above or use the setup wizard for guided provisioning."
@@ -247,11 +291,39 @@ export function MachinesPanel() {
 				/>
 			) : null}
 
-			{visible.length > 0 && view === "table" ? (
+			{mode !== "existing" ? (
+				<div
+					className={
+						focusMachine
+							? "grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(380px,44%)]"
+							: undefined
+					}
+				>
+					<FleetDial
+						machines={visible}
+						activeMachineId={activeMachineId}
+						mode={mode}
+						focusedId={focusMachine?.id ?? null}
+						onSelect={(id) => setFocus(id)}
+						loadById={loadById}
+					/>
+					{focusMachine ? (
+						<FleetInteractPane
+							machineId={focusMachine.id}
+							name={focusMachine.name}
+							agentKind={focusMachine.agentKind}
+							model={focusMachine.model}
+							onClose={() => setFocus(null)}
+						/>
+					) : null}
+				</div>
+			) : null}
+
+			{mode === "existing" && visible.length > 0 && view === "table" ? (
 				<MachineTable machines={visible} activeMachineId={activeMachineId} />
 			) : null}
 
-			{visible.length > 0 && view === "cards" ? (
+			{mode === "existing" && visible.length > 0 && view === "cards" ? (
 				<div
 					className={
 						focusMachine

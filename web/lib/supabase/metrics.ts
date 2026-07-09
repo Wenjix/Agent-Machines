@@ -199,6 +199,50 @@ export async function getCostEstimates(
 	return (data ?? []) as CostRow[];
 }
 
+/**
+ * The most recent metrics sample per machine for a user. Cheap single query
+ * (most-recent-first, dedup in memory) — feeds the live-load signal for the
+ * radial dial. Granularity is the metrics collector's cadence (the cron tick),
+ * so values are "latest known", not real-time.
+ */
+export async function getLatestMetricPerMachine(
+	userId: string,
+): Promise<
+	Map<string, { cpuPercent: number | null; loadAvg1m: number | null; vcpu: number; recordedAt: string }>
+> {
+	const sb = supabaseAdmin();
+	const { data, error } = await sb
+		.from("machine_metrics")
+		.select("machine_id, cpu_percent, load_avg_1m, vcpu, recorded_at")
+		.eq("user_id", userId)
+		.order("recorded_at", { ascending: false })
+		.limit(1000);
+
+	if (error) throw new Error(`getLatestMetricPerMachine: ${error.message}`);
+
+	const result = new Map<
+		string,
+		{ cpuPercent: number | null; loadAvg1m: number | null; vcpu: number; recordedAt: string }
+	>();
+	for (const row of (data ?? []) as Array<{
+		machine_id: string;
+		cpu_percent: number | null;
+		load_avg_1m: number | null;
+		vcpu: number;
+		recorded_at: string;
+	}>) {
+		if (!result.has(row.machine_id)) {
+			result.set(row.machine_id, {
+				cpuPercent: row.cpu_percent,
+				loadAvg1m: row.load_avg_1m,
+				vcpu: row.vcpu,
+				recordedAt: row.recorded_at,
+			});
+		}
+	}
+	return result;
+}
+
 export async function getRecentMetrics(
 	userId: string,
 	machineId: string,

@@ -660,3 +660,41 @@ textarea::placeholder {
 	animation: hero-glitch-flash 0.4s ease-out forwards;
 }
 
+/* ── Fleet dial: node breathing (liveness tied to load) ── */
+@keyframes fleet-node-breathe {
+	0%,
+	100% {
+		transform: scale(1);
+	}
+	50% {
+		transform: scale(calc(1 + var(--breath-amp, 0.05)));
+	}
+}
+.dial-node-breathe {
+	animation: fleet-node-breathe var(--breath-dur, 5s) ease-in-out infinite;
+}
+
+/* ── Fleet dial: boot-stream particle pulse ── */
+@keyframes fleet-stream-pulse {
+	0%,
+	100% {
+		opacity: 0.15;
+		transform: translate(-50%, -50%) scale(0.7);
+	}
+	50% {
+		opacity: 1;
+		transform: translate(-50%, -50%) scale(1);
+	}
+}
+.dial-stream-dot {
+	animation: fleet-stream-pulse 1.8s ease-in-out infinite;
+	animation-delay: var(--stream-delay, 0s);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.dial-node-breathe,
+	.dial-stream-dot {
+		animation: none;
+	}
+}
+

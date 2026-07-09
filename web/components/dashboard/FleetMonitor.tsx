@@ -23,6 +23,7 @@ import {
 	agentUsesRouter,
 } from "@/lib/agents/upstreams";
 import { cn } from "@/lib/cn";
+import { summarizeFleet } from "@/lib/fleet/summarize";
 import type { ProviderCapabilities } from "@/lib/providers";
 import {
 	AGENT_KINDS,
@@ -247,7 +248,7 @@ export function FleetMonitor() {
 	const visible = useMemo(() => machines.filter((m) => !m.archived), [machines]);
 	const active = visible.find((m) => m.id === data?.activeMachineId) ?? null;
 
-	const summary = useMemo(() => summarize(visible), [visible]);
+	const summary = useMemo(() => summarizeFleet(visible), [visible]);
 
 	return (
 		<>
@@ -258,9 +259,9 @@ export function FleetMonitor() {
 					<ReticleBadge>
 						{summary.total} {summary.total === 1 ? "machine" : "machines"}
 					</ReticleBadge>
-					{summary.running > 0 ? (
+					{summary.running + summary.booting > 0 ? (
 						<ReticleBadge variant="success">
-							{summary.running} running
+							{summary.running + summary.booting} running
 						</ReticleBadge>
 					) : null}
 					{summary.sleeping > 0 ? (
@@ -369,26 +370,6 @@ export function FleetMonitor() {
 		) : null}
 		</>
 	);
-}
-
-function summarize(machines: LiveMachine[]) {
-	let running = 0;
-	let sleeping = 0;
-	let failed = 0;
-	for (const m of machines) {
-		if (!m.live.ok) {
-			failed += 1;
-			continue;
-		}
-		if (m.live.state === "ready" || m.live.state === "starting") {
-			running += 1;
-		} else if (m.live.state === "sleeping") {
-			sleeping += 1;
-		} else if (m.live.state === "error" || m.live.state === "destroying") {
-			failed += 1;
-		}
-	}
-	return { total: machines.length, running, sleeping, failed };
 }
 
 function MachineRow({
