@@ -1,0 +1,16 @@
+import type { FleetMode } from "@/components/dashboard/fleet-dial/FleetModeToggle";
+
+export type { FleetMode };
+
+export type NoteSentiment = "+" | "-";
+
+export type EvalNote = {
+	id: string;
+	mode: FleetMode;
+	text: string;
+	createdAt: number;
+	sentiment?: NoteSentiment;
+};
+
+/** Canonical flip order. MUST match FLEET_MODES in FleetModeToggle. */
+export const EVAL_MODES: ReadonlyArray<FleetMode> = ["existing", "synthesis", "organism"];
