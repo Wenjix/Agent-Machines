@@ -1,5 +1,4 @@
 import { HARNESS_SUMMARY, HARNESS_TOOLS_ANSWER, PRODUCT } from "@/lib/platform/harness";
-import { RUNTIME } from "@/lib/platform/runtime";
 
 /**
  * Single source of truth for site-level SEO/GEO/AEO data. Used by
@@ -20,9 +19,15 @@ export const SITE = {
 	wordmark: "agent-machines",
 	url: "https://www.agent-machines.dev",
 	description:
-		`${PRODUCT.oneLiner} Hermes, OpenClaw, Claude Code, or Codex on E2B, Sprites.dev, Dedalus Machines, or Vercel Sandbox. ${HARNESS_SUMMARY}.`,
+		"Agent Machines runs persistent agent workers across runtimes and sandboxes with model routing, skills, MCPs, cron, logs, usage, and an SDK.",
+	longDescription:
+		`${PRODUCT.summary} Choose Hermes, OpenClaw, Claude Code, or Codex, then choose E2B, Sprites.dev, Dedalus Machines, or Vercel Sandbox. Route model paths through Vercel AI Gateway, OpenRouter, native keys, or any supported OpenAI-compatible endpoint. ${HARNESS_SUMMARY}.`,
 	tagline: PRODUCT.tagline,
-	ogImage: "/og.png",
+	ogImage: "/opengraph-image",
+	ogImageAlt:
+		"Agent Machines switchboard for persistent agent workers, sandbox lanes, model paths, loadouts, logs, usage, cron, and artifacts",
+	aiSummary:
+		"Agent Machines is a harness-agnostic and sandbox-agnostic control plane for persistent AI agent workers. It pairs an agent runtime, sandbox provider, model path, loadout, memory, cron, logs, usage, artifacts, and SDK control into one worker.",
 	twitterHandle: "@kevin_liu_01",
 	authorName: "Kevin Liu",
 	authorUrl: "https://github.com/Kevin-Liu-01",
@@ -46,6 +51,36 @@ export const SITE = {
 		"stateful agent",
 		"sandbox agent",
 		"AI agent runtime",
+		"agent router",
+		"sandbox router",
+		"model router",
+		"harness agnostic agent",
+		"sandbox agnostic agent",
+		"agent SDK",
+		"persistent worker",
+		"agent worker",
+		"agent observability",
+		"agent loadout",
+		"agent cron",
+		"agent artifacts",
+		"agent logs",
+		"agent usage tracking",
+		"browser agent console",
+		"E2B agent",
+		"Sprites.dev agent",
+		"Vercel Sandbox agent",
+		"Dedalus agent",
+	],
+	capabilities: [
+		"Harness-agnostic agent runtime switchboard",
+		"Sandbox-agnostic provider switchboard",
+		"Model path and gateway profile routing",
+		"Persistent worker provisioning",
+		"Browser terminal and command surface",
+		"Loadout registry for skills, MCP servers, CLIs, plugins, and services",
+		"Memory bundles and worker presets",
+		"Logs, usage, cron, sessions, artifacts, and fleet observability",
+		"TypeScript SDK and REST API",
 	],
 } as const;
 
@@ -67,16 +102,16 @@ export const FAQ: ReadonlyArray<FaqEntry> = [
 	{
 		question: "Can I run multiple agents for different jobs?",
 		answer:
-			"Yes. Provision a fleet of specialist machines from opinionated presets — e.g. Hermes for research/cron, OpenClaw for browser work, Claude Code or Codex for coding. Each preset bundles runtime, skills, MCPs, and system prompts (the same stack vendors ship as single-purpose products like design or research modes). One dashboard supervises every machine: activity, chat, cron, logs, and cost.",
+			"Yes. Provision specialist machines from opinionated presets: Hermes for memory and scheduled work, OpenClaw for browser work, Claude Code or Codex for coding tasks. Each preset bundles runtime, model path, memory, and loadout. One dashboard supervises activity, chat, cron, logs, usage, and artifacts.",
 	},
 	{
 		question: "What is Agent Machines?",
-		answer: `${PRODUCT.summary} Think OpenRouter for agents and containers: pick Hermes, OpenClaw, Claude Code, or Codex and pick E2B, Sprites.dev, Dedalus Machines, or Vercel Sandbox in one account. ${PRODUCT.fleet} The dashboard supervises the fleet; MCP/CLI (roadmap) lets other agents orchestrate workers programmatically.`,
+		answer: `${PRODUCT.summary} Pick Hermes, OpenClaw, Claude Code, or Codex, then pick E2B, Sprites.dev, Dedalus Machines, or Vercel Sandbox. ${PRODUCT.fleet} The dashboard supervises the fleet. The long-term control surface is dashboard for humans, MCP/CLI for agent-to-agent orchestration.`,
 	},
 	{
 		question: "How is this different from a regular chatbot?",
 		answer:
-			"A regular chatbot usually stores memory in browser state or a vendor-owned memory layer. Agent Machines persists operational state to a real machine filesystem: chat records, artifacts, USER.md, MEMORY.md, agent sessions, cron schedules, skills, and the runtime venv.",
+			"A regular chatbot mostly returns messages. Agent Machines gives the agent a machine record, runtime root, terminal, filesystem, logs, usage, cron schedules, sessions, artifacts, and installable tools. State lives with the worker instead of disappearing after one request.",
 	},
 	{
 		question: "Which agents can I run?",
@@ -86,7 +121,12 @@ export const FAQ: ReadonlyArray<FaqEntry> = [
 	{
 		question: "Which providers can host the machine?",
 		answer:
-			"E2B Sandbox, Sprites.dev, Dedalus Machines, and Vercel Sandbox are live provider implementations. Each exposes provision, exec, public URL, and bootstrap through the same MachineProvider abstraction. Dedalus currently benchmarks best on boot latency (~250ms) and sleep/wake in our harness; E2B, Sprites, and Vercel Sandbox are fully supported alternatives.",
+			"E2B Sandbox, Sprites.dev, Dedalus Machines, and Vercel Sandbox are live provider implementations. Each plugs into the same MachineProvider abstraction for provision, state, lifecycle, command streaming where available, and public URLs where supported.",
+	},
+	{
+		question: "How is this different from a sandbox like E2B or Daytona?",
+		answer:
+			"Those are machine substrates. Agent Machines is the product layer above them: pick E2B, Sprites.dev, Vercel Sandbox, or Dedalus and get runtime install, loadout, gateway, cron, logs, usage, artifacts, and the browser console in one worker. Provider-specific features like sleep, snapshots, and public URLs are surfaced when the selected lane supports them.",
 	},
 	{
 		question: "How do I get my own machine today?",
@@ -110,7 +150,7 @@ export const FAQ: ReadonlyArray<FaqEntry> = [
 	{
 		question: "What inference providers are supported?",
 		answer:
-			"Models route through any OpenAI-compatible /v1 endpoint. The CLI defaults to a vendor-agnostic inference URL; override with DEDALUS_CHAT_BASE_URL or configure model.base_url on the machine. The dashboard stores a model slug per machine.",
+			"Models can use any OpenAI-compatible /v1 endpoint. The CLI prefers Vercel AI Gateway, then OpenRouter, then configured fallbacks; override with AGENT_CHAT_BASE_URL or configure model.base_url on the machine. The dashboard stores a model slug per machine.",
 	},
 	{
 		question: "What happens when a machine sleeps?",

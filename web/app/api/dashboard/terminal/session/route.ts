@@ -7,7 +7,6 @@
  */
 
 import { execOnMachine } from "@/lib/dashboard/exec";
-import { isMachineRunningCached } from "@/lib/dashboard/machine-running-cache";
 import {
 	CONSOLE_SESSION,
 	capturePaneCommand,
@@ -38,13 +37,6 @@ export async function POST(request: Request): Promise<Response> {
 	const cols = clampDim(body.cols, 20, 500, 120);
 	const rows = clampDim(body.rows, 5, 200, 32);
 
-	if (!(await isMachineRunningCached(machineId))) {
-		return Response.json(
-			{ error: "machine_offline", message: "Machine is not awake. Wake it first." },
-			{ status: 503 },
-		);
-	}
-
 	// Resize an existing pane to the client's dims BEFORE capturing, so the
 	// snapshot height matches xterm and the captured cursor row is valid in
 	// xterm coordinates.
@@ -64,8 +56,12 @@ export async function POST(request: Request): Promise<Response> {
 		const out = res.stdout;
 		if (out.includes("AM_CONSOLE_NO_TMUX")) {
 			return Response.json(
-				{ error: "no_tmux", message: "tmux is unavailable and could not be installed on this machine." },
-				{ status: 501 },
+				{
+					ok: false,
+					error: "no_tmux",
+					message: "tmux is unavailable and could not be installed on this machine.",
+				},
+				{ headers: { "Cache-Control": "no-store" } },
 			);
 		}
 		const [readyPart, afterSnap = ""] = out.split(SNAP);
@@ -73,8 +69,12 @@ export async function POST(request: Request): Promise<Response> {
 		const [cursorStr = "", offStr = ""] = afterCur.split(OFF);
 		if (!readyPart.includes("AM_CONSOLE_READY")) {
 			return Response.json(
-				{ error: "session_failed", message: out.slice(0, 400) || res.stderr.slice(0, 400) },
-				{ status: 502 },
+				{
+					ok: false,
+					error: "session_failed",
+					message: out.slice(0, 400) || res.stderr.slice(0, 400) || "console session failed",
+				},
+				{ headers: { "Cache-Control": "no-store" } },
 			);
 		}
 		const offset = Number.parseInt(offStr.trim(), 10) || 0;
@@ -91,6 +91,9 @@ export async function POST(request: Request): Promise<Response> {
 		});
 	} catch (err) {
 		const message = err instanceof Error ? err.message : "session create failed";
-		return Response.json({ error: "session_failed", message }, { status: 502 });
+		return Response.json(
+			{ ok: false, error: "session_failed", message },
+			{ headers: { "Cache-Control": "no-store" } },
+		);
 	}
 }

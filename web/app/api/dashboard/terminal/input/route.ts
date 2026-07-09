@@ -9,7 +9,12 @@
  */
 
 import { execOnMachine } from "@/lib/dashboard/exec";
-import { sendKeysCommand } from "@/lib/dashboard/terminal-session";
+import { stripTerminalDeviceResponses } from "@/lib/dashboard/terminal-input";
+import {
+	installAgentLauncherCommand,
+	sendKeysCommand,
+} from "@/lib/dashboard/terminal-session";
+import { AGENT_KINDS, type AgentKind } from "@/lib/user-config/schema";
 import { getEffectiveUserId } from "@/lib/user-config/identity";
 
 export const runtime = "nodejs";
@@ -18,7 +23,18 @@ export const maxDuration = 30;
 
 const MAX_INPUT_BYTES = 8_192;
 
-type Body = { machineId?: string; data?: string };
+type Body = {
+	machineId?: string;
+	data?: string;
+	rememberAgentKind?: string;
+};
+
+function parseRememberedAgent(value: unknown): AgentKind | null {
+	return typeof value === "string" &&
+		(AGENT_KINDS as readonly string[]).includes(value)
+		? (value as AgentKind)
+		: null;
+}
 
 export async function POST(request: Request): Promise<Response> {
 	const userId = await getEffectiveUserId();
@@ -26,14 +42,21 @@ export async function POST(request: Request): Promise<Response> {
 
 	const body = (await request.json().catch(() => ({}))) as Body;
 	const machineId = typeof body.machineId === "string" ? body.machineId : undefined;
-	const data = typeof body.data === "string" ? body.data : "";
+	const data =
+		typeof body.data === "string"
+			? stripTerminalDeviceResponses(body.data)
+			: "";
 	if (!data) return Response.json({ error: "empty_input" }, { status: 400 });
 	if (Buffer.byteLength(data, "utf8") > MAX_INPUT_BYTES) {
 		return Response.json({ error: "input_too_large" }, { status: 400 });
 	}
+	const rememberAgentKind = parseRememberedAgent(body.rememberAgentKind);
 
 	try {
-		await execOnMachine(sendKeysCommand(data), { machineId, timeoutMs: 15_000 });
+		const command = rememberAgentKind
+			? `${installAgentLauncherCommand()}\n${sendKeysCommand(data)}`
+			: sendKeysCommand(data);
+		await execOnMachine(command, { machineId, timeoutMs: 6_000 });
 		return Response.json({ ok: true });
 	} catch (err) {
 		const message = err instanceof Error ? err.message : "input failed";

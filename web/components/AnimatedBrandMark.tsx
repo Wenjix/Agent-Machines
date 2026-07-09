@@ -8,8 +8,8 @@ import { cn } from "@/lib/cn";
 const AGENTS: { mark: Mark; label: string }[] = [
 	{ mark: "nous", label: "Hermes" },
 	{ mark: "openclaw", label: "OpenClaw" },
-	{ mark: "anthropic", label: "Claude" },
-	{ mark: "openai", label: "Codex" },
+	{ mark: "claudecode", label: "Claude" },
+	{ mark: "codex", label: "Codex" },
 	{ mark: "cursor", label: "Cursor" },
 ];
 
@@ -144,7 +144,11 @@ export function AnimatedBrandMark({
 									opacity,
 								}}
 							>
-								<Logo mark={a.mark} size={size} />
+								<Logo
+									mark={a.mark}
+									size={size}
+									tone={a.mark === "cursor" ? "auto" : "native"}
+								/>
 							</span>
 						);
 					})}

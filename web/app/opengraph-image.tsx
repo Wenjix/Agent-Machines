@@ -16,7 +16,8 @@ import { HARNESS_COUNTS } from "@/lib/platform/harness-counts";
  */
 
 export const runtime = "edge";
-export const alt = "Agent Machines — OpenRouter for agents and containers";
+export const alt =
+	"Agent Machines switchboard for persistent agent workers, sandboxes, model paths, loadouts, logs, usage, cron, and artifacts";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -79,7 +80,7 @@ export default async function OpengraphImage() {
 							background: COLOR.purpleGlow,
 						}}
 					>
-						agents + containers
+						agents + sandboxes
 					</span>
 					<span
 						style={{
@@ -88,7 +89,7 @@ export default async function OpengraphImage() {
 							color: COLOR.textDim,
 						}}
 					>
-						fleet control plane
+						worker control plane
 					</span>
 				</div>
 
@@ -104,10 +105,10 @@ export default async function OpengraphImage() {
 					}}
 				>
 					<span style={{ fontSize: 72, color: COLOR.text }}>
-						OpenRouter for agents
+						Persistent workers
 					</span>
 					<span style={{ fontSize: 72, color: COLOR.textDim }}>
-						and containers.
+						any runtime, any sandbox.
 					</span>
 				</div>
 
@@ -121,8 +122,8 @@ export default async function OpengraphImage() {
 						maxWidth: 980,
 					}}
 				>
-					Route runtime + substrate. Deploy persistent workers with skills, MCP,
-					cron, and fleet supervision — one click per specialist.
+					Pair agent runtime, sandbox lane, model path, loadout, logs,
+					usage, cron, and artifacts from one account.
 				</div>
 
 				{/* Feature strip */}
@@ -138,10 +139,10 @@ export default async function OpengraphImage() {
 				>
 					{[
 						{ label: `${HARNESS_COUNTS.skillCount} skills` },
-						{ label: `${HARNESS_COUNTS.serviceRouteCount} service routes` },
+						{ label: `${HARNESS_COUNTS.serviceRouteCount} service lanes` },
 						{ label: `${HARNESS_COUNTS.cliCount}+ CLIs` },
 						{ label: `${HARNESS_COUNTS.mcpServerCount} MCP servers` },
-						{ label: "route runtime + substrate" },
+						{ label: "runtime + sandbox + model" },
 					].map((f) => (
 						<div
 							key={f.label}

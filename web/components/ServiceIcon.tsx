@@ -1,5 +1,6 @@
 import Image from "next/image";
 
+import { VercelMark } from "@/components/VercelMark";
 import { cn } from "@/lib/cn";
 
 /**
@@ -10,7 +11,8 @@ import { cn } from "@/lib/cn";
  *
  * - `tone="color"` (default) -- renders the SVG via `<Image>` so the
  *   brand's official palette is preserved. Use this in cards / chips
- *   where the logo carries identity.
+ *   where the logo carries identity. Dark-fill marks in `FORCE_MONO`
+ *   ignore this and stay theme-adaptive.
  *
  * - `tone="mono"` -- renders the SVG as a CSS mask filled with
  *   `currentColor`. Use this in dense list rows where the logo should
@@ -162,7 +164,11 @@ export function ServiceIcon({
 	const dim = `${size}px`;
 	const label = SERVICE_LABEL[slug];
 	const resolvedTone: "color" | "mono" =
-		tone ?? (FORCE_MONO.has(slug) ? "mono" : "color");
+		FORCE_MONO.has(slug) ? "mono" : (tone ?? "color");
+
+	if (slug === "vercel" && resolvedTone === "mono") {
+		return <VercelMark size={size} className={className} />;
+	}
 
 	if (resolvedTone === "mono") {
 		return (

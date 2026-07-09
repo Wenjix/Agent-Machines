@@ -16,7 +16,7 @@ function commandsFor(a: AgentMeta): CommandRow[] {
 		{ label: "interactive", value: a.runCmd },
 	];
 	if (a.headlessCmd) {
-		rows.push({ label: "headless / exec", value: a.headlessCmd });
+		rows.push({ label: "headless / command", value: a.headlessCmd });
 	}
 	rows.push(
 		{ label: "docs", value: a.docsUrl },
@@ -73,7 +73,7 @@ const TERMINAL_OUTPUT: Record<AgentKind, string[]> = {
 		"  ◈ FTS5 index: 2,847 entries",
 		"  ◈ cron scheduler: 4 jobs active",
 		"  ◈ MCP host: 6 servers connected",
-		"  ◈ provider: dedalus router (api.dedaluslabs.ai/v1)",
+		"  ◈ provider: vercel ai gateway → openrouter fallback",
 		"  ◈ model: claude-sonnet-4-5-20250514",
 		"  ◈ session: ses_7f2a9c (resumed)",
 		"",
@@ -93,7 +93,7 @@ const TERMINAL_OUTPUT: Record<AgentKind, string[]> = {
 		"  │ → 247 passed, 0 failed (12.4s)",
 		"  └─────────────────────────────────────────────",
 		"",
-		"  hermes › All green. Production deploy is live,",
+		"  hermes › All clear. Production deploy is live,",
 		"  247 tests passing. Want me to schedule a",
 		"  follow-up check in 30 minutes?",
 	],
@@ -222,9 +222,9 @@ function TerminalPanel({ agentId, meta }: { agentId: AgentKind; meta: AgentMeta 
 	}, [visibleCount]);
 
 	return (
-		<div className="flex h-[420px] flex-col bg-[#0a0a0c]">
+		<div className="flex h-full min-h-[520px] w-full flex-col bg-[#0a0a0c]">
 			<div className="flex items-center gap-2 border-b border-[#222] px-4 py-2">
-				<span className="h-2 w-2 rounded-full bg-[var(--ret-green)]" />
+				<span className="h-2 w-2 rounded-full bg-[var(--ret-border-strong)]" />
 				<span className="text-[9px] uppercase tracking-[0.18em] text-[#555]">
 					{meta.name.toLowerCase()} — terminal
 				</span>
@@ -246,13 +246,13 @@ function TerminalPanel({ agentId, meta }: { agentId: AgentKind; meta: AgentMeta 
 							key={`${agentId}-${i}`}
 							className={cn(
 								"block",
-								line.startsWith("$") && "text-[var(--ret-green)]",
+								line.startsWith("$") && "text-[var(--ret-text)]",
 								line.startsWith("  you ›") && "text-[#e0e0e0] font-medium",
 								(line.includes("hermes ›") || line.includes("openclaw ›") || line.includes("claude ›") || line.includes("codex ›")) && "text-[var(--ret-purple)]",
 								(line.startsWith("  ┌") || line.startsWith("  │") || line.startsWith("  └")) && "text-[#555]",
 								(line.startsWith("  ◈") || line.startsWith("  ◆")) && "text-[#666]",
 								(line.includes("Read ") || line.includes("Edit ")) && "text-[var(--ret-amber)]",
-								line.includes("Created ") && "text-[var(--ret-green)]",
+								line.includes("Created ") && "text-[var(--ret-text)]",
 								line.includes("Modified ") && "text-[var(--ret-amber)]",
 							)}
 						>
@@ -274,7 +274,7 @@ export function AgentCommandToggle() {
 	const rows = commandsFor(meta);
 
 	return (
-		<div className="grid gap-px overflow-hidden bg-[var(--ret-border)]">
+		<div className="grid h-full min-h-[620px] w-full grid-rows-[auto_minmax(0,1fr)] gap-px overflow-hidden bg-[var(--ret-border)]">
 			{/* Tab bar */}
 			<div className="grid grid-cols-4 gap-px bg-[var(--ret-border)]">
 				{AGENTS.map((a) => (
@@ -289,22 +289,22 @@ export function AgentCommandToggle() {
 								: "bg-[var(--ret-bg)] text-[var(--ret-text-muted)] hover:bg-[var(--ret-bg-soft)] hover:text-[var(--ret-text)]",
 						)}
 					>
-						<Logo mark={a.logoMark} size={13} />
+						<Logo mark={a.logoMark} size={13} tone="native" />
 						<span className="hidden sm:inline">{a.name}</span>
 					</button>
 				))}
 			</div>
 
 			{/* Two-panel body: terminal left, info right */}
-			<div className="grid gap-px bg-[var(--ret-border)] md:grid-cols-[1.4fr_0.6fr]">
+			<div className="grid min-h-0 w-full gap-px bg-[var(--ret-border)] md:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_400px]">
 				<TerminalPanel agentId={active} meta={meta} />
 
 				{/* Info sidebar */}
-				<div className="flex flex-col gap-px bg-[var(--ret-border)]">
+				<div className="flex min-h-0 w-full flex-col gap-px bg-[var(--ret-border)]">
 					{/* Agent header */}
 					<div className="flex items-center justify-between bg-[var(--ret-bg)] px-4 py-3">
 						<div className="flex items-center gap-2">
-							<Logo mark={meta.logoMark} size={16} />
+							<Logo mark={meta.logoMark} size={16} tone="native" />
 							<span className="text-xs font-semibold text-[var(--ret-text)]">
 								{meta.name}
 							</span>
@@ -353,7 +353,7 @@ export function AgentCommandToggle() {
 								className="flex items-center gap-2 bg-[var(--ret-bg)] px-4 py-1.5"
 							>
 								{i === 0 ? (
-									<span className="h-1.5 w-1.5 shrink-0 bg-[var(--ret-green)]" />
+									<span className="h-1.5 w-1.5 shrink-0 bg-[var(--ret-border-strong)]" />
 								) : (
 									<span className="h-1.5 w-1.5 shrink-0 bg-[var(--ret-border)]" />
 								)}
@@ -362,6 +362,58 @@ export function AgentCommandToggle() {
 								</span>
 							</div>
 						))}
+					</div>
+
+					<div className="min-h-0 flex-1 bg-[var(--ret-bg)] px-4 py-4">
+						<div className="flex items-center justify-between gap-3">
+							<span className="text-[9px] uppercase tracking-[0.18em] text-[var(--ret-text-muted)]">
+								worker state
+							</span>
+							<span className="font-mono text-[9px] text-[var(--ret-text-muted)]">
+								.agent-machines
+							</span>
+						</div>
+						<div className="mt-3 grid grid-cols-3 border border-[var(--ret-border)]">
+							<div className="border-r border-[var(--ret-border)] px-3 py-2">
+								<div className="font-mono text-[9px] uppercase tracking-[0.16em] text-[var(--ret-text-muted)]">
+									tools
+								</div>
+								<div className="mt-1 text-sm font-semibold text-[var(--ret-text)]">
+									{meta.nativeToolNames.length}
+								</div>
+							</div>
+							<div className="border-r border-[var(--ret-border)] px-3 py-2">
+								<div className="font-mono text-[9px] uppercase tracking-[0.16em] text-[var(--ret-text-muted)]">
+									lanes
+								</div>
+								<div className="mt-1 text-sm font-semibold text-[var(--ret-text)]">
+									{meta.providerOptions.length}
+								</div>
+							</div>
+							<div className="px-3 py-2">
+								<div className="font-mono text-[9px] uppercase tracking-[0.16em] text-[var(--ret-text-muted)]">
+									state
+								</div>
+								<div className="mt-1 text-sm font-semibold text-[var(--ret-text)]">
+									saved
+								</div>
+							</div>
+						</div>
+						<div className="mt-4 grid gap-px bg-[var(--ret-border)]">
+							{["memory", "cron", "logs", "artifacts"].map((item) => (
+								<div
+									key={item}
+									className="flex items-center justify-between bg-[var(--ret-bg)] py-1.5"
+								>
+									<span className="font-mono text-[10px] text-[var(--ret-text)]">
+										{item}
+									</span>
+									<span className="font-mono text-[9px] uppercase tracking-[0.16em] text-[var(--ret-text-muted)]">
+										visible
+									</span>
+								</div>
+							))}
+						</div>
 					</div>
 				</div>
 			</div>

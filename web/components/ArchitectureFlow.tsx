@@ -39,7 +39,7 @@ import { HARNESS, HARNESS_SUMMARY } from "@/lib/platform/harness";
  *   y=720  Hermes  |  gateway  |  OpenClaw    <- agent runtime row    *
  *   y=860  ~/.agent-machines/ (runtime state + app data + repo)        *
  *   y=1000 built-ins | services | skills | cursor-bridge              *
- *   y=1140 Dedalus AI router                                          *
+ *   y=1140 Model gateway router                                       *
  *   y=1280 Anthropic | OpenAI | other catalogs                        *
  *                                                                     *
  * Critically, path-row col k sits directly under tool-row col k, and  *
@@ -109,6 +109,18 @@ type NodeData = {
 	status?: NodeStatus;
 };
 
+const PUBLIC_NATIVE_MARKS = new Set<CompositeMark>([
+	"agent",
+	"nous",
+	"openclaw",
+	"claudecode",
+	"codex",
+]);
+
+function publicLogoTone(mark: CompositeMark): "native" | undefined {
+	return PUBLIC_NATIVE_MARKS.has(mark) ? "native" : undefined;
+}
+
 const NODE_SIZE: Record<NonNullable<NodeData["size"]>, string> = {
 	sm: "w-[230px]",
 	md: "w-[260px]",
@@ -153,7 +165,7 @@ function FlowNode({ data, selected }: NodeProps<NodeData>) {
 					<div className="mt-1 flex items-center gap-1.5">
 						{data.mark ? (
 							<span className="text-[var(--ret-text)]">
-								<Logo mark={data.mark} size={14} />
+								<Logo mark={data.mark} size={14} tone={publicLogoTone(data.mark)} />
 							</span>
 						) : null}
 						<h3 className="truncate text-[13px] font-semibold tracking-tight text-[var(--ret-text)]">
@@ -381,7 +393,7 @@ const INITIAL_NODES: Node<NodeData>[] = [
 			subtitle: "persistent Linux sandbox",
 			body: "Full Linux sandboxes via E2B with pause/resume, snapshots, and public URLs. Best for stable agent work with fast cold starts.",
 			bullets: [
-				"create / pause / resume / exec",
+				"create / pause / resume / command",
 				"snapshot-ready bootstrap",
 				"public URLs",
 			],
@@ -419,10 +431,10 @@ const INITIAL_NODES: Node<NodeData>[] = [
 			eyebrow: "provider",
 			title: "Dedalus Machines",
 			subtitle: "default VM provider",
-			body: "Provisions, wakes, sleeps, executes commands. Second-billed; ~30s cold boot, <5s warm.",
+			body: "Provisions, wakes, sleeps, and runs commands. Second-billed; ~30s cold boot, <5s warm.",
 			bullets: [
 				"provision / wake / sleep",
-				"state / exec / destroy",
+				"state / command / destroy",
 				"second-billed VM",
 			],
 			mark: "dedalus",
@@ -441,7 +453,7 @@ const INITIAL_NODES: Node<NodeData>[] = [
 			subtitle: "Sprites compute",
 			body: "Sprites.dev hosts with public URL proxy on port 8080. Bootstrap installs agents into ~/.agent-machines/ on the sprite filesystem.",
 			bullets: [
-				"create / exec / destroy",
+				"create / command / destroy",
 				"public URL proxy",
 				"persistent sprite disk",
 			],
@@ -619,7 +631,7 @@ const INITIAL_NODES: Node<NodeData>[] = [
 			bullets: [
 				"terminal . fs_read/write",
 				"browser_* . vision",
-				"execute_code . delegate",
+				"run_code . delegate",
 			],
 			tone: "tools",
 			size: "sm",
@@ -631,7 +643,7 @@ const INITIAL_NODES: Node<NodeData>[] = [
 		position: { x: COL.c1, y: Y.tools },
 		data: {
 			eyebrow: "tool surface",
-			title: `${HARNESS.serviceRouteCount} service routes`,
+			title: `${HARNESS.serviceRouteCount} service lanes`,
 			subtitle: "ranked interfaces per vendor",
 			body: "Each service entry ranks MCP → CLI → plugin skill → personal skill. Mirrors kevin-wiki tool-hierarchy. Credential-gated MCPs register from mcps/catalog.json.",
 			bullets: [
@@ -689,15 +701,15 @@ const INITIAL_NODES: Node<NodeData>[] = [
 		position: { x: HERO_X.router, y: Y.router },
 		data: {
 			eyebrow: "inference router",
-			title: "Dedalus AI router",
-			subtitle: "api.dedaluslabs.ai/v1 . 200+ models",
-			body: "OpenAI-compatible router that fronts 200+ models. Hermes is configured via model.base_url; swap DEDALUS_CHAT_BASE_URL to target a different OpenAI-compatible endpoint.",
+			title: "Model gateway router",
+			subtitle: "Vercel AI Gateway . OpenRouter . fallbacks",
+			body: "OpenAI-compatible routing prefers Vercel AI Gateway first, then OpenRouter, then configured fallbacks. Hermes is configured via model.base_url.",
 			bullets: [
-				"single key, 200+ models",
+				"Vercel first",
+				"OpenRouter fallback",
 				"model slug per machine",
-				"swap base_url to switch",
 			],
-			mark: "dedalus",
+			mark: "vercel",
 			tone: "router",
 			size: "lg",
 		},
@@ -741,10 +753,10 @@ const INITIAL_NODES: Node<NodeData>[] = [
 			eyebrow: "model provider",
 			title: "Other catalogs",
 			subtitle: "Mistral . Together . Groq . xAI . ...",
-			body: "Anything the Dedalus router lists. Or point DEDALUS_CHAT_BASE_URL at an alternative gateway.",
+			body: "Anything the selected gateway lists. Use Vercel AI Gateway first, OpenRouter second, or point AGENT_CHAT_BASE_URL at a custom gateway.",
 			bullets: [
-				"200+ slugs via the router",
-				"swap base_url to use another gateway",
+				"gateway-listed model slugs",
+				"custom base_url supported",
 				"per-machine model choice",
 			],
 			tone: "model",
@@ -795,7 +807,7 @@ const EDGES: Edge[] = [
 		id: "e-dedalus-machine",
 		source: "provider-dedalus",
 		target: "machine",
-		label: "provision / exec",
+		label: "provision / command",
 	},
 	// Machine -> gateway (single vertical drop)
 	{
@@ -989,7 +1001,7 @@ export function ArchitectureFlow() {
 					<p className="mt-3 max-w-[78ch] text-[13px] leading-relaxed text-[var(--ret-text-dim)]">
 						{nodes.length} nodes, ten rows. The persistent Linux machine
 						in the middle is the product boundary -- everything above
-						provisions and routes to it, everything below runs inside it.
+						provisions and plugs into it, everything below runs inside it.
 						Click any node to inspect; drag to rearrange.
 					</p>
 				</div>
@@ -1097,7 +1109,11 @@ export function ArchitectureFlow() {
 								</div>
 								<div className="mt-1 flex items-center gap-1.5 text-[var(--ret-text)]">
 									{active.data.mark ? (
-										<Logo mark={active.data.mark} size={14} />
+										<Logo
+											mark={active.data.mark}
+											size={14}
+											tone={publicLogoTone(active.data.mark)}
+										/>
 									) : null}
 									<strong className="text-[13px]">{active.data.title}</strong>
 								</div>

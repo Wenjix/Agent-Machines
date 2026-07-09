@@ -20,13 +20,14 @@ import { ReticleBadge } from "@/components/reticle/ReticleBadge";
 import { ReticleFrame } from "@/components/reticle/ReticleFrame";
 import { BrailleSpinner } from "@/components/ui/BrailleSpinner";
 import { cn } from "@/lib/cn";
+import type { AiKeyField } from "@/lib/agents/credentials";
 import { withMachineId } from "@/lib/dashboard/api-url";
-import type { AgentKind } from "@/lib/user-config/schema";
+import type { AgentKind, PublicMachineRef } from "@/lib/user-config/schema";
 
 export type AgentReadiness = "ready" | "fallback" | "blocked";
 
 export type AgentRequirement = {
-	field: "anthropic" | "openai" | "dedalus";
+	field: AiKeyField;
 	label: string;
 	required: boolean;
 	signupUrl?: string;
@@ -50,6 +51,7 @@ type Props = {
 	model: string | null;
 	agents: AgentCardData[];
 	cursorHasKey: boolean;
+	machines?: PublicMachineRef[];
 };
 
 const READINESS_TONE: Record<AgentReadiness, string> = {
@@ -71,6 +73,7 @@ export function AgentsPanel({
 	model,
 	agents,
 	cursorHasKey,
+	machines = [],
 }: Props) {
 	const active = agents.find((a) => a.kind === activeAgentKind);
 
@@ -105,7 +108,11 @@ export function AgentsPanel({
 							</ReticleBadge>
 						) : null}
 					</div>
-					<AgentSwitcher value={activeAgentKind} activeMachineId={machineId} />
+					<AgentSwitcher
+						value={activeAgentKind}
+						activeMachineId={machineId}
+						machines={machines}
+					/>
 				</ReticleFrame>
 
 				{/* All agents grid */}

@@ -34,10 +34,9 @@ const SIZE: Record<Size, string> = {
 };
 
 const BASE = cn(
-	"inline-flex items-center justify-center font-medium",
-	"transition-all duration-200 cursor-pointer select-none",
-	"active:translate-y-[1px]",
-	"disabled:opacity-50 disabled:cursor-not-allowed disabled:active:translate-y-0",
+	"inline-flex min-h-10 items-center justify-center font-medium",
+	"ret-pressable cursor-pointer select-none",
+	"disabled:cursor-not-allowed disabled:opacity-50",
 );
 
 type SharedProps = {

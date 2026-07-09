@@ -23,9 +23,28 @@ export function agentLaunchCommand(
 		case "claude-code":
 			return `${cd} source ~/.agent-machines/.agent-env 2>/dev/null; claude`;
 		case "hermes":
-			return `${cd} export HERMES_HOME="$HOME/.agent-machines"; export PATH="$HOME/.agent-machines/venv/bin:$PATH"; hermes chat`;
+			return `${cd} source ~/.agent-machines/.agent-env 2>/dev/null; export HERMES_HOME="$HOME/.agent-machines"; export PATH="$HOME/.agent-machines/venv/bin:$PATH"; hermes chat`;
 		case "openclaw":
-			return `${cd} export PATH="$HOME/.npm-global/bin:$PATH"; openclaw chat`;
+			return `${cd} source ~/.agent-machines/.agent-env 2>/dev/null; export PATH="$HOME/.npm-global/bin:$PATH"; export OPENCLAW_STATE_DIR="$HOME/.openclaw"; export OPENCLAW_NO_RESPAWN=1; openclaw chat`;
+		default:
+			return null;
+	}
+}
+
+/**
+ * Short command the browser terminal injects. The API route installs this
+ * launcher before sending it, so the visible terminal input stays readable
+ * and the machine can persist whether the agent CLI was running.
+ */
+export function agentTerminalLauncherCommand(
+	agentKind: string | null | undefined,
+): string | null {
+	switch (agentKind) {
+		case "codex":
+		case "claude-code":
+		case "hermes":
+		case "openclaw":
+			return `~/.agent-machines/bin/am-launch-agent ${agentKind}`;
 		default:
 			return null;
 	}
@@ -68,9 +87,9 @@ export function agentOneShotInvocation(
 		case "claude-code":
 			return `${cd} source ~/.agent-machines/.agent-env 2>/dev/null; claude -p "$AM_CRON_PROMPT"`;
 		case "hermes":
-			return `${cd} export HERMES_HOME="$HOME/.agent-machines"; export PATH="$HOME/.agent-machines/venv/bin:$PATH"; hermes run "$AM_CRON_PROMPT"`;
+			return `${cd} source ~/.agent-machines/.agent-env 2>/dev/null; export HERMES_HOME="$HOME/.agent-machines"; export PATH="$HOME/.agent-machines/venv/bin:$PATH"; hermes chat --query "$AM_CRON_PROMPT" --quiet`;
 		case "openclaw":
-			return `${cd} export PATH="$HOME/.npm-global/bin:$PATH"; openclaw run "$AM_CRON_PROMPT"`;
+			return `${cd} source ~/.agent-machines/.agent-env 2>/dev/null; export PATH="$HOME/.npm-global/bin:$PATH"; export OPENCLAW_STATE_DIR="$HOME/.openclaw"; export OPENCLAW_NO_RESPAWN=1; openclaw infer model run --prompt "$AM_CRON_PROMPT" --json`;
 		default:
 			return null;
 	}

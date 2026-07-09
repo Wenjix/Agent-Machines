@@ -16,7 +16,7 @@
  */
 
 import { getProvider } from "@/lib/providers";
-import type { ExecStreamEvent } from "@/lib/providers/types";
+import type { ExecStreamEvent, MachineProvider } from "@/lib/providers/types";
 import { getUserConfigCached } from "@/lib/user-config/request-cache";
 
 import { resolveMachine } from "./exec";
@@ -25,9 +25,21 @@ import { tailFileStreamOnMachine } from "./exec-stream";
 /** One interactive console session per machine (sufficient for the operator UI). */
 export const CONSOLE_SESSION = "amconsole";
 export const CONSOLE_LOG = "/tmp/am-console.log";
+export const CONSOLE_AGENT_STATE =
+	"$HOME/.agent-machines/state/terminal-agent.json";
+export const CONSOLE_AGENT_LAUNCHER =
+	"$HOME/.agent-machines/bin/am-launch-agent";
 
 const DEFAULT_COLS = 120;
 const DEFAULT_ROWS = 32;
+const EXPECTED_STREAM_END_PATTERNS = [
+	/deadline_exceeded/i,
+	/operation timed out/i,
+	/timed out after \d+ms/i,
+	/streamExec timed out/i,
+	/AbortError/i,
+	/The operation was aborted/i,
+];
 
 export function clampDim(value: unknown, min: number, max: number, fallback: number): number {
 	const n = Math.floor(Number(value));
@@ -57,15 +69,139 @@ export function ensureSessionCommand(cols: number, rows: number): string {
 	return [
 		`command -v tmux >/dev/null 2>&1 || { (sudo -n apt-get install -y tmux || apt-get install -y tmux || sudo -n dnf install -y tmux || dnf install -y tmux || apk add --no-cache tmux || sudo -n yum install -y tmux || yum install -y tmux) >/dev/null 2>&1; }`,
 		`if ! command -v tmux >/dev/null 2>&1; then echo AM_CONSOLE_NO_TMUX; exit 0; fi`,
-		`tmux has-session -t ${CONSOLE_SESSION} 2>/dev/null || { tmux new-session -d -s ${CONSOLE_SESSION} -x ${c} -y ${r}; tmux set-option -g -t ${CONSOLE_SESSION} history-limit 10000 2>/dev/null || true; : > ${CONSOLE_LOG}; tmux pipe-pane -t ${CONSOLE_SESSION} -o 'cat >> ${CONSOLE_LOG}'; }`,
+		`am_console_created=0`,
+		`tmux has-session -t ${CONSOLE_SESSION} 2>/dev/null || { tmux new-session -d -s ${CONSOLE_SESSION} -x ${c} -y ${r}; am_console_created=1; tmux set-option -g -t ${CONSOLE_SESSION} history-limit 10000 2>/dev/null || true; : > ${CONSOLE_LOG}; tmux pipe-pane -t ${CONSOLE_SESSION} -o 'cat >> ${CONSOLE_LOG}'; }`,
+		restoreAgentSessionCommand(),
 		`tmux has-session -t ${CONSOLE_SESSION} 2>/dev/null && echo AM_CONSOLE_READY || echo AM_CONSOLE_FAILED`,
 	].join("\n");
+}
+
+function shellQuote(value: string): string {
+	return `'${value.replace(/'/g, "'\\''")}'`;
+}
+
+/**
+ * Best-effort console warmup. Provisioning can return as soon as the host
+ * exists, then this starts tmux setup on the machine while the browser is
+ * navigating to the terminal. The normal session route still verifies readiness.
+ */
+export function primeConsoleSession(
+	provider: MachineProvider,
+	machineId: string,
+	options: { cols?: number; rows?: number } = {},
+): void {
+	const command = ensureSessionCommand(
+		options.cols ?? DEFAULT_COLS,
+		options.rows ?? DEFAULT_ROWS,
+	);
+	if (typeof provider.execBackground === "function") {
+		void provider.execBackground(machineId, command).catch((err) => {
+			console.warn(
+				`[terminal] console prime failed for ${machineId}: ${
+					err instanceof Error ? err.message : String(err)
+				}`,
+			);
+		});
+		return;
+	}
+
+	void provider
+		.exec(
+			machineId,
+			`nohup bash -lc ${shellQuote(command)} >/tmp/am-console-prime.log 2>&1 &`,
+			{ timeoutMs: 5_000 },
+		)
+		.catch((err) => {
+			console.warn(
+				`[terminal] console prime failed for ${machineId}: ${
+					err instanceof Error ? err.message : String(err)
+				}`,
+			);
+		});
 }
 
 export function sendKeysCommand(input: string): string {
 	const hex = toHexKeys(input);
 	if (!hex) return ":";
 	return `tmux send-keys -t ${CONSOLE_SESSION} -H ${hex}`;
+}
+
+export function installAgentLauncherCommand(): string {
+	return String.raw`mkdir -p "$HOME/.agent-machines/bin" "$HOME/.agent-machines/state"
+cat > "$HOME/.agent-machines/bin/am-launch-agent" <<'AM_LAUNCHER'
+#!/usr/bin/env bash
+set -u
+
+kind="${"${1:-}"}"
+state_dir="$HOME/.agent-machines/state"
+state_file="$state_dir/terminal-agent.json"
+mkdir -p "$state_dir"
+
+write_state() {
+	status="$1"
+	ts="$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date)"
+	printf '{"desiredAgentKind":"%s","status":"%s","updatedAt":"%s"}\n' "$kind" "$status" "$ts" > "$state_file"
+}
+
+finish() {
+	code=$?
+	if [ "$code" -eq 0 ]; then
+		write_state exited
+	else
+		write_state error
+	fi
+	exit "$code"
+}
+trap finish EXIT
+
+case "$kind" in
+	hermes|openclaw|claude-code|codex) ;;
+	*)
+		echo "unknown agent kind: $kind" >&2
+		exit 64
+		;;
+esac
+
+write_state running
+cd "$HOME/agent-machines" 2>/dev/null || cd "$HOME" || exit 1
+source "$HOME/.agent-machines/.agent-env" 2>/dev/null || true
+
+case "$kind" in
+	hermes)
+		export HERMES_HOME="$HOME/.agent-machines"
+		export PATH="$HOME/.agent-machines/venv/bin:$PATH"
+		hermes chat
+		;;
+	openclaw)
+		export PATH="$HOME/.npm-global/bin:$PATH"
+		export OPENCLAW_STATE_DIR="$HOME/.openclaw"
+		export OPENCLAW_NO_RESPAWN=1
+		openclaw chat
+		;;
+	claude-code)
+		claude
+		;;
+	codex)
+		codex
+		;;
+esac
+AM_LAUNCHER
+chmod +x "$HOME/.agent-machines/bin/am-launch-agent"`;
+}
+
+function restoreAgentSessionCommand(): string {
+	return String.raw`if [ "$am_console_created" = "1" ] && [ -f "$HOME/.agent-machines/state/terminal-agent.json" ]; then
+	am_status="$(sed -n 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$HOME/.agent-machines/state/terminal-agent.json" | head -1)"
+	am_kind="$(sed -n 's/.*"desiredAgentKind"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$HOME/.agent-machines/state/terminal-agent.json" | head -1)"
+	if [ "$am_status" = "running" ]; then
+		case "$am_kind" in
+			hermes|openclaw|claude-code|codex)
+				` + installAgentLauncherCommand() + String.raw`
+				tmux send-keys -t amconsole "$HOME/.agent-machines/bin/am-launch-agent $am_kind" Enter
+				;;
+		esac
+	fi
+fi`;
 }
 
 export function resizeCommand(cols: number, rows: number): string {
@@ -95,6 +231,16 @@ export function cursorPosCommand(): string {
 
 export function logSizeCommand(): string {
 	return `[ -f ${CONSOLE_LOG} ] && wc -c < ${CONSOLE_LOG} || echo 0`;
+}
+
+/**
+ * Long-running `tail -f` commands end when the provider-enforced deadline
+ * fires. That is a normal reconnect boundary for the browser console, not a
+ * terminal failure the user needs to see.
+ */
+export function isExpectedConsoleStreamEnd(error: unknown): boolean {
+	const message = error instanceof Error ? error.message : String(error ?? "");
+	return EXPECTED_STREAM_END_PATTERNS.some((pattern) => pattern.test(message));
 }
 
 /**

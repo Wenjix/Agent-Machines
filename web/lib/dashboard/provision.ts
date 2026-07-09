@@ -5,7 +5,7 @@
  */
 
 import { getProvider } from "@/lib/providers";
-import { ROUTER_PRESETS } from "@/lib/agents/upstreams";
+import { DEFAULT_ROUTER_ID, ROUTER_PRESETS } from "@/lib/agents/upstreams";
 import { setUserConfig } from "@/lib/user-config/clerk";
 import {
 	INITIAL_BOOTSTRAP_STATE,
@@ -24,6 +24,8 @@ export type CreateMachineOpts = {
 	name: string;
 	/** Router preset id or saved gateway-profile id (hermes/openclaw). */
 	gatewayProfileId?: string | null;
+	/** Optional saved environment profile whose vars are installed on the VM. */
+	environmentProfileId?: string | null;
 };
 
 export type CreatedMachine = { machineId: string; phase: string; state: string };
@@ -33,7 +35,21 @@ export async function createMachineForConfig(
 	opts: CreateMachineOpts,
 ): Promise<CreatedMachine> {
 	const provider = getProvider(opts.providerKind, config.providers);
-	const result = await provider.provision({ spec: opts.spec, name: opts.name });
+	const environmentProfileId =
+		typeof opts.environmentProfileId === "string" &&
+		config.environmentProfiles.some((p) => p.id === opts.environmentProfileId)
+			? opts.environmentProfileId
+			: (config.environmentProfiles[0]?.id ?? null);
+	const environmentVars = environmentProfileId
+		? config.environmentProfiles.find((p) => p.id === environmentProfileId)?.vars
+		: undefined;
+	const result = await provider.provision({
+		spec: opts.spec,
+		name: opts.name,
+		agentKind: opts.agentKind,
+		model: opts.model,
+		env: environmentVars,
+	});
 
 	// Accept a saved gateway profile id or a built-in router preset id (presets
 	// resolve by id at bootstrap, not persisted as profiles).
@@ -43,8 +59,8 @@ export async function createMachineForConfig(
 			ROUTER_PRESETS.some((p) => p.id === opts.gatewayProfileId));
 	const gatewayProfileId =
 		(isKnownRouter ? opts.gatewayProfileId ?? null : null) ??
-		config.gatewayProfiles.find((profile) => profile.kind === "dedalus")?.id ??
-		null;
+		config.gatewayProfiles.find((profile) => profile.id === DEFAULT_ROUTER_ID)?.id ??
+		DEFAULT_ROUTER_ID;
 
 	const ref: MachineRef = {
 		id: result.id,
@@ -57,7 +73,7 @@ export async function createMachineForConfig(
 		// row as a vestigial nullable column.
 		agentProfileId: null,
 		gatewayProfileId,
-		environmentProfileId: null,
+		environmentProfileId,
 		bootstrapPresetId: null,
 		createdAt: new Date().toISOString(),
 		apiUrl: null,

@@ -1,4 +1,5 @@
 import { ClerkProvider } from "@clerk/nextjs";
+import { Analytics } from "@vercel/analytics/next";
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { Instrument_Serif } from "next/font/google";
@@ -6,6 +7,7 @@ import type { ReactNode } from "react";
 
 import { SITE, TITLE_SEPARATOR } from "@/lib/seo/config";
 import { buildRootJsonLd } from "@/lib/seo/json-ld";
+import { DEFAULT_OG_IMAGE, DEFAULT_TWITTER_IMAGE } from "@/lib/seo/metadata";
 
 import "./globals.css";
 
@@ -72,9 +74,7 @@ export const metadata: Metadata = {
 		siteName: SITE.name,
 		type: "website",
 		locale: "en_US",
-		// Image is registered automatically by app/opengraph-image.tsx
-		// (Next.js convention) -- explicit images: [] would be overridden
-		// anyway, so we omit it here to avoid duplicate <meta og:image>.
+		images: [DEFAULT_OG_IMAGE],
 	},
 	twitter: {
 		card: "summary_large_image",
@@ -82,6 +82,15 @@ export const metadata: Metadata = {
 		creator: SITE.twitterHandle,
 		title: SITE.name,
 		description: SITE.description,
+		images: [DEFAULT_TWITTER_IMAGE],
+	},
+	other: {
+		"ai-summary": SITE.aiSummary,
+		"llms.txt": `${SITE.url}/llms.txt`,
+		"product-category": "persistent agent worker control plane",
+		"agent-runtime-router": "Hermes, OpenClaw, Claude Code, Codex",
+		"sandbox-provider-router":
+			"E2B, Sprites.dev, Dedalus Machines, Vercel Sandbox",
 	},
 	icons: {
 		icon: [{ url: "/icon.png", sizes: "512x512", type: "image/png" }],
@@ -152,6 +161,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
 			<body>
 				{children}
 				<div className="ret-grain" aria-hidden="true" />
+				<Analytics />
 			</body>
 		</html>
 	);

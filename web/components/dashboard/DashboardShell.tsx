@@ -6,7 +6,7 @@ import { cn } from "@/lib/cn";
 import type { PublicUserConfig } from "@/lib/user-config/schema";
 
 import { DashboardReticleProvider } from "./DashboardReticleProvider";
-import { SidebarNav } from "./SidebarNav";
+import { MobileDashboardNav, SidebarNav } from "./SidebarNav";
 import { StatusHeader } from "./StatusHeader";
 
 type Props = {
@@ -15,14 +15,12 @@ type Props = {
 };
 
 export function DashboardShell({ children, config }: Props) {
-	const active = config.machines.find((m) => m.id === config.activeMachineId);
-	const agentKind = active?.agentKind ?? config.draftAgentKind;
 	const setupComplete = config.machines.some((m) => !m.archived);
 
 	return (
 		<DashboardReticleProvider>
 		<div className="relative grid min-h-[100dvh] bg-[var(--ret-bg-soft)] lg:grid-cols-[220px_1fr]">
-			<aside className="sticky top-0 z-10 hidden h-[100dvh] self-start border-r border-[var(--ret-border)] bg-[var(--ret-bg)] lg:flex lg:flex-col">
+			<aside className="sticky top-0 z-30 hidden h-[100dvh] self-start border-r border-[var(--ret-border)] bg-[var(--ret-bg)] lg:flex lg:flex-col">
 				<div
 					className={cn(
 						DASHBOARD_SHELL_HEADER_ROW,
@@ -36,7 +34,8 @@ export function DashboardShell({ children, config }: Props) {
 				</div>
 			</aside>
 			<div className="relative z-10 flex min-h-[100dvh] min-w-0 flex-col bg-[var(--ret-bg)]">
-				<StatusHeader agentKind={agentKind} machines={config.machines} />
+				<StatusHeader machines={config.machines} />
+				<MobileDashboardNav setupComplete={setupComplete} machines={config.machines} />
 				<main className="flex-1">{children}</main>
 			</div>
 		</div>
