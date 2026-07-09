@@ -19,7 +19,9 @@ import { randomUUID } from "node:crypto";
 import { getEffectiveUserId } from "@/lib/user-config/identity";
 
 import { MachineProviderError } from "@/lib/providers";
+import { agentUsesRouter } from "@/lib/agents/upstreams";
 import { createMachineForConfig } from "@/lib/dashboard/provision";
+import { recommendArm } from "@/lib/learning/recommend";
 import { getUserConfig } from "@/lib/user-config/clerk";
 import {
 	AGENT_KINDS,
@@ -43,6 +45,8 @@ type Body = {
 	force?: boolean;
 	/** Chosen model router (gateway profile id) for hermes/openclaw. */
 	gatewayProfileId?: string;
+	/** Opt in to learned routing: fill omitted axes from the active policy. */
+	autoRoute?: boolean;
 };
 
 function isProvider(value: unknown): value is ProviderKind {
@@ -96,17 +100,38 @@ export async function POST(request: Request): Promise<Response> {
 		);
 	}
 
+	// Loop A (opt-in): when the caller sets autoRoute, fill any omitted axis from
+	// the learned routing policy (greedy) before falling back to the wizard
+	// drafts. The interactive UI does NOT set autoRoute — it uses the
+	// recommend-then-confirm banner instead — so its behavior is unchanged. The
+	// credential gate below still hard-filters; the policy only chooses among
+	// feasible arms.
+	// Condition the recommendation on whatever axes the caller fixed, so the
+	// omitted axes are filled from ONE coherent arm rather than mixing body axes
+	// with recommendation axes from a different best arm.
+	const explicitModel =
+		typeof body.model === "string" && body.model.trim().length > 0 ? body.model.trim() : undefined;
+	const rec =
+		body.autoRoute === true
+			? await recommendArm(config, {
+					runtime: isAgent(body.agentKind) ? body.agentKind : undefined,
+					substrate: isProvider(body.providerKind) ? body.providerKind : undefined,
+					model: explicitModel,
+					routerId: typeof body.gatewayProfileId === "string" ? body.gatewayProfileId : undefined,
+				}).catch(() => null)
+			: null;
+
 	const providerKind: ProviderKind = isProvider(body.providerKind)
 		? body.providerKind
-		: config.draftProviderKind;
+		: rec?.arm.substrate ?? config.draftProviderKind;
 	const agentKind: AgentKind = isAgent(body.agentKind)
 		? body.agentKind
-		: config.draftAgentKind;
+		: rec?.arm.runtime ?? config.draftAgentKind;
 	const spec = asSpec(body.spec, config.draftSpec ?? DEFAULT_MACHINE_SPEC);
-	const model =
-		typeof body.model === "string" && body.model.trim().length > 0
-			? body.model.trim()
-			: config.draftModel;
+	const model = explicitModel ?? rec?.arm.model ?? config.draftModel;
+	const gatewayProfileId =
+		body.gatewayProfileId ??
+		(agentUsesRouter(agentKind) ? rec?.arm.routerId ?? null : null);
 	const name =
 		typeof body.name === "string" && body.name.trim().length > 0
 			? body.name.trim().slice(0, 80)
@@ -151,7 +176,7 @@ export async function POST(request: Request): Promise<Response> {
 			spec,
 			model,
 			name,
-			gatewayProfileId: body.gatewayProfileId ?? null,
+			gatewayProfileId,
 		});
 		return Response.json({
 			ok: true,
