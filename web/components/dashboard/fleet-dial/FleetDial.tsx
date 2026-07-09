@@ -28,6 +28,7 @@ export function FleetDial({
 	focusedId,
 	onSelect,
 	loadById,
+	active = true,
 }: {
 	machines: DialMachine[];
 	activeMachineId: string | null;
@@ -36,6 +37,8 @@ export function FleetDial({
 	onSelect: (id: string | null) => void;
 	/** Optional live CPU load per machine id (0..1). Absent in v1. */
 	loadById?: Record<string, number>;
+	/** When false, the ambient canvas pauses its animation loop (kept-alive but hidden). */
+	active?: boolean;
 }) {
 	const containerRef = useRef<HTMLDivElement | null>(null);
 	const [dialSize, setDialSize] = useState(0);
@@ -103,6 +106,7 @@ export function FleetDial({
 							cx={layout.cx}
 							cy={layout.cy}
 							reducedMotion={reducedMotion}
+							active={active}
 						/>
 					) : null}
 

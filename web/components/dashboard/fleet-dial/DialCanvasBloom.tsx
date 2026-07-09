@@ -26,6 +26,7 @@ export function DialCanvasBloom({
 	cx,
 	cy,
 	reducedMotion,
+	active,
 }: {
 	nodes: RadialNode[];
 	dialSize: number;
@@ -33,6 +34,7 @@ export function DialCanvasBloom({
 	cx: number;
 	cy: number;
 	reducedMotion: boolean;
+	active: boolean;
 }) {
 	const canvasRef = useRef<HTMLCanvasElement | null>(null);
 	const driftRef = useRef<Array<{ angle: number; r: number; speed: number; size: number }>>([]);
@@ -90,7 +92,7 @@ export function DialCanvasBloom({
 			}
 		};
 
-		if (reducedMotion) {
+		if (reducedMotion || !active) {
 			drawBlobs(0);
 			drawDrift();
 			return;
@@ -127,7 +129,7 @@ export function DialCanvasBloom({
 			cancelAnimationFrame(raf);
 			document.removeEventListener("visibilitychange", onVisibility);
 		};
-	}, [nodes, dialSize, liveRadius, cx, cy, reducedMotion]);
+	}, [nodes, dialSize, liveRadius, cx, cy, reducedMotion, active]);
 
 	return (
 		<canvas
