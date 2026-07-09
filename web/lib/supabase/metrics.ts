@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "./client";
+import { listMachines } from "./machines";
 
 export type MetricRow = {
 	id: number;
@@ -197,6 +198,61 @@ export async function getCostEstimates(
 
 	if (error) throw new Error(`getCostEstimates: ${error.message}`);
 	return (data ?? []) as CostRow[];
+}
+
+/**
+ * The most recent metrics sample per machine for a user. Cheap single query
+ * (most-recent-first, dedup in memory) — feeds the live-load signal for the
+ * radial dial. Granularity is the metrics collector's cadence (the cron tick),
+ * so values are "latest known", not real-time.
+ */
+export async function getLatestMetricPerMachine(
+	userId: string,
+): Promise<
+	Map<string, { cpuPercent: number | null; loadAvg1m: number | null; vcpu: number; recordedAt: string }>
+> {
+	const sb = supabaseAdmin();
+	const result = new Map<
+		string,
+		{ cpuPercent: number | null; loadAvg1m: number | null; vcpu: number; recordedAt: string }
+	>();
+
+	// One latest-sample query per (non-archived) machine, run in parallel. A prior
+	// single global `limit(1000)` scan could omit machines when the fleet — or one
+	// machine's sampling cadence — exceeded that window; per-machine `limit(1)` is
+	// correct regardless of fleet size, each query a cheap indexed lookup.
+	const machines = (await listMachines(userId)).filter((m) => !m.archived);
+	await Promise.all(
+		machines.map(async (m) => {
+			try {
+				const { data, error } = await sb
+					.from("machine_metrics")
+					.select("machine_id, cpu_percent, load_avg_1m, vcpu, recorded_at")
+					.eq("user_id", userId)
+					.eq("machine_id", m.id)
+					.order("recorded_at", { ascending: false })
+					.limit(1)
+					.maybeSingle();
+				const row = data as {
+					machine_id: string;
+					cpu_percent: number | null;
+					load_avg_1m: number | null;
+					vcpu: number;
+					recorded_at: string;
+				} | null;
+				if (error || !row) return;
+				result.set(row.machine_id, {
+					cpuPercent: row.cpu_percent,
+					loadAvg1m: row.load_avg_1m,
+					vcpu: row.vcpu,
+					recordedAt: row.recorded_at,
+				});
+			} catch {
+				// Skip this machine on a transient error; the others still populate.
+			}
+		}),
+	);
+	return result;
 }
 
 export async function getRecentMetrics(

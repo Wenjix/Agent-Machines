@@ -2,10 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { MachineFleetCard } from "@/components/dashboard/MachineFleetCard";
 import { FleetInteractPane } from "@/components/dashboard/FleetInteractPane";
+import {
+	FleetModeToggle,
+	type FleetMode,
+} from "@/components/dashboard/fleet-dial/FleetModeToggle";
 import { DashboardPageBody } from "@/components/dashboard/DashboardPageBody";
 import { ReticleButton } from "@/components/reticle/ReticleButton";
 import { ReticleFrame } from "@/components/reticle/ReticleFrame";
@@ -14,6 +19,8 @@ import { SchematicPanel } from "@/components/reticle/SchematicPanel";
 import type { LogLine } from "@/lib/dashboard/types";
 import { fetchLogTail, headlineFromLogs, isFleetLogsLoaded, shouldFetchFleetLogs } from "@/lib/fleet/fetch-log-tail";
 import { useFleetLoadout } from "@/lib/fleet/use-fleet-loadout";
+import { useLiveLoads } from "@/lib/fleet/use-live-loads";
+import { useEvalMode } from "@/lib/fleet/eval/use-eval-mode";
 import { toFleetStreamCard } from "@/lib/fleet/view-model";
 import { cn } from "@/lib/cn";
 import type { ProviderCapabilities } from "@/lib/providers";
@@ -30,8 +37,34 @@ import {
 
 const POLL_MS = 5000;
 const VIEW_STORAGE_KEY = "am-fleet-view";
+const MODE_STORAGE_KEY = "am-fleet-mode";
 
 type FleetView = "cards" | "table";
+
+/**
+ * The radial dial touches canvas / ResizeObserver / matchMedia, so it must not
+ * server-render. Dynamic + ssr:false with a height-reserving placeholder keeps
+ * first paint deterministic (no hydration mismatch, no layout shift).
+ */
+const FleetDial = dynamic(
+	() => import("@/components/dashboard/fleet-dial/FleetDial").then((m) => m.FleetDial),
+	{
+		ssr: false,
+		loading: () => (
+			<div className="min-h-[clamp(440px,62vh,760px)] w-full border border-[var(--ret-border)]" />
+		),
+	},
+);
+
+/**
+ * The eval harness is a gated personal tool (?eval=1). Dynamic + ssr:false so the
+ * whole fleet-eval tree is only fetched when eval mode activates — kept out of the
+ * default MachinesPanel bundle for everyone else.
+ */
+const EvalHarness = dynamic(
+	() => import("@/components/dashboard/fleet-eval/EvalHarness").then((m) => m.EvalHarness),
+	{ ssr: false },
+);
 
 const TABLE_PHASE: Record<string, { label: string; dot: string; text: string }> = {
 	ready: { label: "Running", dot: "bg-[var(--ret-green)]", text: "text-[var(--ret-green)]" },
@@ -80,17 +113,37 @@ export function MachinesPanel() {
 	const [editing, setEditing] = useState<string | null>(null);
 	const [showProvision, setShowProvision] = useState(false);
 	const [view, setView] = useState<FleetView>("cards");
+	// Flagship 3-way: existing | synthesis | organism. Default existing so first
+	// paint matches the user's current world (no hydration surprise).
+	const [mode, setMode] = useState<FleetMode>("existing");
 	const loadout = useFleetLoadout();
+	const evalMode = useEvalMode();
+	// Live per-machine CPU load (0..1) drives the dial's breathing. Polled while a
+	// radial mode is on screen; in eval mode both dials are kept alive so poll always.
+	const loadById = useLiveLoads(evalMode ? true : mode !== "existing");
 
 	useEffect(() => {
 		const saved = window.localStorage.getItem(VIEW_STORAGE_KEY);
 		if (saved === "cards" || saved === "table") setView(saved);
+		const savedMode = window.localStorage.getItem(MODE_STORAGE_KEY);
+		if (savedMode === "existing" || savedMode === "synthesis" || savedMode === "organism") {
+			setMode(savedMode);
+		}
 	}, []);
 
 	const selectView = useCallback((next: FleetView) => {
 		setView(next);
 		try {
 			window.localStorage.setItem(VIEW_STORAGE_KEY, next);
+		} catch {
+			// storage unavailable; in-memory toggle still works
+		}
+	}, []);
+
+	const selectMode = useCallback((next: FleetMode) => {
+		setMode(next);
+		try {
+			window.localStorage.setItem(MODE_STORAGE_KEY, next);
 		} catch {
 			// storage unavailable; in-memory toggle still works
 		}
@@ -179,6 +232,55 @@ export function MachinesPanel() {
 		return map;
 	}, [machines, logsById, logsFetched, activeMachineId]);
 
+	const cardEls = () =>
+		visible.map((machine, idx) => {
+			const card = cardsById.get(machine.id);
+			if (!card) return null;
+			return (
+				<MachineFleetCard
+					key={machine.id}
+					machine={machine}
+					card={card}
+					loadout={loadout}
+					active={machine.id === activeMachineId}
+					focused={machine.id === focusMachine?.id}
+					delaySec={idx * 0.65}
+					logsLoaded={isFleetLogsLoaded(machine, logsFetched)}
+					editing={editing === machine.id}
+					onChange={refresh}
+					onToggleEdit={() =>
+						setEditing((prev) => (prev === machine.id ? null : machine.id))
+					}
+					onSavedEdit={() => {
+						setEditing(null);
+						void refresh();
+					}}
+					onInteract={() => setFocus(machine.id)}
+					EditPanel={EditPanel}
+				/>
+			);
+		});
+
+	const renderStageExisting = () => {
+		if (visible.length === 0) {
+			// Match the shipped path: only a truly empty fleet shows the empty shell.
+			// While loading, or when machines exist but are all archived (the archived
+			// section below carries them), don't flash a false "No machines yet".
+			if (loading || machines.length > 0) return null;
+			return (
+				<EmptyShell
+					title="No machines yet"
+					body="Click '+ New machine' above or use the setup wizard for guided provisioning."
+					cta={null}
+				/>
+			);
+		}
+		if (view === "table") {
+			return <MachineTable machines={visible} activeMachineId={activeMachineId} />;
+		}
+		return <section className="grid grid-cols-1 gap-3 lg:grid-cols-2">{cardEls()}</section>;
+	};
+
 	return (
 		<DashboardPageBody>
 			{error ? (
@@ -202,11 +304,14 @@ export function MachinesPanel() {
 			{/* Quick provision controls */}
 			{!loading ? (
 				<div className="flex flex-wrap items-center justify-between gap-2">
-					<div className="flex items-center gap-3">
+					<div className="flex flex-wrap items-center gap-3">
 						<h2 className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--ret-text-muted)]">
 							Fleet
 						</h2>
-						<ViewToggle view={view} onChange={selectView} />
+						<FleetModeToggle mode={mode} onChange={selectMode} />
+						{mode === "existing" ? (
+							<ViewToggle view={view} onChange={selectView} />
+						) : null}
 					</div>
 					<div className="flex items-center gap-2">
 						<ReticleButton
@@ -239,19 +344,7 @@ export function MachinesPanel() {
 				/>
 			) : null}
 
-			{!loading && machines.length === 0 && !showProvision ? (
-				<EmptyShell
-					title="No machines yet"
-					body="Click '+ New machine' above or use the setup wizard for guided provisioning."
-					cta={null}
-				/>
-			) : null}
-
-			{visible.length > 0 && view === "table" ? (
-				<MachineTable machines={visible} activeMachineId={activeMachineId} />
-			) : null}
-
-			{visible.length > 0 && view === "cards" ? (
+			{evalMode ? (
 				<div
 					className={
 						focusMachine
@@ -259,43 +352,25 @@ export function MachinesPanel() {
 							: undefined
 					}
 				>
-					<section
-						className={
-							focusMachine
-								? "grid max-h-[calc(100dvh-12rem)] grid-cols-1 gap-3 overflow-y-auto lg:grid-cols-1"
-								: "grid grid-cols-1 gap-3 lg:grid-cols-2"
-						}
-					>
-						{visible.map((machine, idx) => {
-							const card = cardsById.get(machine.id);
-							if (!card) return null;
-							return (
-								<MachineFleetCard
-									key={machine.id}
-									machine={machine}
-									card={card}
-									loadout={loadout}
-									active={machine.id === activeMachineId}
-									focused={machine.id === focusMachine?.id}
-									delaySec={idx * 0.65}
-									logsLoaded={isFleetLogsLoaded(machine, logsFetched)}
-									editing={editing === machine.id}
-									onChange={refresh}
-									onToggleEdit={() =>
-										setEditing((prev) =>
-											prev === machine.id ? null : machine.id,
-										)
-									}
-									onSavedEdit={() => {
-										setEditing(null);
-										void refresh();
-									}}
-									onInteract={() => setFocus(machine.id)}
-									EditPanel={EditPanel}
+					<EvalHarness
+						mode={mode}
+						onModeChange={selectMode}
+						renderPane={(paneMode, active) =>
+							paneMode === "existing" ? (
+								<div className="h-full overflow-y-auto p-1">{renderStageExisting()}</div>
+							) : (
+								<FleetDial
+									machines={visible}
+									activeMachineId={activeMachineId}
+									mode={paneMode}
+									focusedId={focusMachine?.id ?? null}
+									onSelect={(id) => setFocus(id)}
+									loadById={loadById}
+									active={active}
 								/>
-							);
-						})}
-					</section>
+							)
+						}
+					/>
 					{focusMachine ? (
 						<FleetInteractPane
 							machineId={focusMachine.id}
@@ -306,7 +381,78 @@ export function MachinesPanel() {
 						/>
 					) : null}
 				</div>
-			) : null}
+			) : (
+				<>
+					{mode === "existing" && !loading && machines.length === 0 && !showProvision ? (
+						<EmptyShell
+							title="No machines yet"
+							body="Click '+ New machine' above or use the setup wizard for guided provisioning."
+							cta={null}
+						/>
+					) : null}
+
+					{mode !== "existing" ? (
+						<div
+							className={
+								focusMachine
+									? "grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(380px,44%)]"
+									: undefined
+							}
+						>
+							<FleetDial
+								machines={visible}
+								activeMachineId={activeMachineId}
+								mode={mode}
+								focusedId={focusMachine?.id ?? null}
+								onSelect={(id) => setFocus(id)}
+								loadById={loadById}
+							/>
+							{focusMachine ? (
+								<FleetInteractPane
+									machineId={focusMachine.id}
+									name={focusMachine.name}
+									agentKind={focusMachine.agentKind}
+									model={focusMachine.model}
+									onClose={() => setFocus(null)}
+								/>
+							) : null}
+						</div>
+					) : null}
+
+					{mode === "existing" && visible.length > 0 && view === "table" ? (
+						<MachineTable machines={visible} activeMachineId={activeMachineId} />
+					) : null}
+
+					{mode === "existing" && visible.length > 0 && view === "cards" ? (
+						<div
+							className={
+								focusMachine
+									? "grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(380px,44%)]"
+									: undefined
+							}
+						>
+							<section
+								className={
+									focusMachine
+										? "grid max-h-[calc(100dvh-12rem)] grid-cols-1 gap-3 overflow-y-auto lg:grid-cols-1"
+										: "grid grid-cols-1 gap-3 lg:grid-cols-2"
+								}
+							>
+								{cardEls()}
+							</section>
+							{focusMachine ? (
+								<FleetInteractPane
+									machineId={focusMachine.id}
+									name={focusMachine.name}
+									agentKind={focusMachine.agentKind}
+									model={focusMachine.model}
+									onClose={() => setFocus(null)}
+								/>
+							) : null}
+						</div>
+					) : null}
+				</>
+			)}
 
 			{archived.length > 0 ? (
 				<section className="space-y-3">
