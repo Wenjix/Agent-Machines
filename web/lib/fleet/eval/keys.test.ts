@@ -32,6 +32,10 @@ describe("keyToAction", () => {
 		expect(keyToAction("n", { shift: false })).toEqual({ type: "focusNote" });
 	});
 
+	it("maps shift+n (N) to focus note too", () => {
+		expect(keyToAction("N", { shift: true })).toEqual({ type: "focusNote" });
+	});
+
 	it("returns null for unmapped keys", () => {
 		expect(keyToAction("x", { shift: false })).toBeNull();
 		expect(keyToAction("4", { shift: false })).toBeNull();

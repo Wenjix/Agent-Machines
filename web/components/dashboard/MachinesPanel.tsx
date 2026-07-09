@@ -253,6 +253,7 @@ export function MachinesPanel() {
 		});
 
 	const renderStageExisting = () => {
+		if (loading && visible.length === 0) return null;
 		if (visible.length === 0) {
 			return (
 				<EmptyShell

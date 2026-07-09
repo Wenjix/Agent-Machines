@@ -20,7 +20,8 @@ function isNote(v: unknown): v is EvalNote {
 		typeof n.id === "string" &&
 		typeof n.text === "string" &&
 		typeof n.createdAt === "number" &&
-		(n.mode === "existing" || n.mode === "synthesis" || n.mode === "organism")
+		(n.mode === "existing" || n.mode === "synthesis" || n.mode === "organism") &&
+		(n.sentiment === undefined || n.sentiment === "+" || n.sentiment === "-")
 	);
 }
 

@@ -1,4 +1,4 @@
-import type { FleetMode } from "@/components/dashboard/fleet-dial/FleetModeToggle";
+import { FLEET_MODES, type FleetMode } from "@/components/dashboard/fleet-dial/FleetModeToggle";
 
 export type { FleetMode };
 
@@ -12,5 +12,5 @@ export type EvalNote = {
 	sentiment?: NoteSentiment;
 };
 
-/** Canonical flip order. MUST match FLEET_MODES in FleetModeToggle. */
-export const EVAL_MODES: ReadonlyArray<FleetMode> = ["existing", "synthesis", "organism"];
+/** Canonical flip order, derived from the single source of truth. */
+export const EVAL_MODES: ReadonlyArray<FleetMode> = FLEET_MODES;

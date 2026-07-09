@@ -15,6 +15,8 @@ function isInteractive(el: EventTarget | null): boolean {
 		tag === "INPUT" ||
 		tag === "TEXTAREA" ||
 		tag === "BUTTON" ||
+		tag === "SELECT" ||
+		tag === "OPTION" ||
 		el.isContentEditable ||
 		el.getAttribute("role") === "button"
 	);

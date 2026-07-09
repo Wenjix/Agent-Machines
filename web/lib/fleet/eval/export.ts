@@ -6,7 +6,7 @@ function marker(note: EvalNote): string {
 	return "";
 }
 
-/** Renders notes as a Markdown board grouped by interface, in flip order. */
+/** Renders notes as a Markdown board grouped by interface, in EVAL_MODES order. */
 export function notesToMarkdown(notes: EvalNote[]): string {
 	const lines: string[] = ["# Fleet interface eval notes", ""];
 	for (const mode of EVAL_MODES) {

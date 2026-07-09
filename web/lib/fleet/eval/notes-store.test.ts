@@ -42,6 +42,15 @@ describe("createNotesStore", () => {
 		expect(store.list()).toEqual([]);
 	});
 
+	it("filters out persisted entries with a malformed sentiment", () => {
+		const seed = JSON.stringify([
+			{ id: "a", mode: "existing", text: "ok", createdAt: 1 },
+			{ id: "b", mode: "existing", text: "bad sentiment", createdAt: 2, sentiment: 123 },
+		]);
+		const store = createNotesStore({ storage: fakeStorage(seed) });
+		expect(store.list().map((n) => n.id)).toEqual(["a"]);
+	});
+
 	it("sets sentiment and removes by id", () => {
 		const store = createNotesStore({ storage: fakeStorage(), makeId: seq, now: fixedNow });
 		const [note] = store.add("synthesis", "x");

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { notesToMarkdown } from "@/lib/fleet/eval/export";
 import { useEvalNotes } from "@/lib/fleet/eval/use-eval-notes";
@@ -23,6 +23,13 @@ export function EvalNotesPanel({
 	const [draft, setDraft] = useState("");
 	const [collapsed, setCollapsed] = useState(false);
 	const [copied, setCopied] = useState(false);
+	const copyTimeoutRef = useRef<number | null>(null);
+
+	useEffect(() => {
+		return () => {
+			if (copyTimeoutRef.current !== null) window.clearTimeout(copyTimeoutRef.current);
+		};
+	}, []);
 
 	const submit = () => {
 		const text = draft.trim();
@@ -35,7 +42,8 @@ export function EvalNotesPanel({
 		try {
 			await navigator.clipboard.writeText(notesToMarkdown(notes));
 			setCopied(true);
-			window.setTimeout(() => setCopied(false), 1200);
+			if (copyTimeoutRef.current !== null) window.clearTimeout(copyTimeoutRef.current);
+			copyTimeoutRef.current = window.setTimeout(() => setCopied(false), 1200);
 		} catch {
 			// clipboard blocked; no-op
 		}
@@ -65,7 +73,7 @@ export function EvalNotesPanel({
 						onClick={copyMarkdown}
 						className="font-mono text-[9px] uppercase tracking-[0.16em] text-[var(--ret-text-muted)] hover:text-[var(--ret-text)]"
 					>
-						{copied ? "copied" : "copy md"}
+						<span aria-live="polite">{copied ? "copied" : "copy md"}</span>
 					</button>
 					<button
 						type="button"
