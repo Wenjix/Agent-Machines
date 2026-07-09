@@ -9,6 +9,7 @@
  * reopens with the latest offset when the stream ends.
  */
 
+import { isMachineRunningCached } from "@/lib/dashboard/machine-running-cache";
 import { SSE_HEADERS, sseFrame } from "@/lib/dashboard/sse";
 import {
 	isExpectedConsoleStreamEnd,
@@ -31,6 +32,13 @@ export async function GET(request: Request): Promise<Response> {
 	const url = new URL(request.url);
 	const machineId = url.searchParams.get("machineId")?.trim() || undefined;
 	const offset = Math.max(0, Number.parseInt(url.searchParams.get("offset") ?? "0", 10) || 0);
+
+	if (!(await isMachineRunningCached(machineId))) {
+		return Response.json(
+			{ error: "machine_offline", message: "Machine is not awake." },
+			{ status: 503 },
+		);
+	}
 
 	const stream = new ReadableStream({
 		async start(controller) {

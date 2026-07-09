@@ -39,7 +39,7 @@ export async function createMachineForConfig(
 		typeof opts.environmentProfileId === "string" &&
 		config.environmentProfiles.some((p) => p.id === opts.environmentProfileId)
 			? opts.environmentProfileId
-			: (config.environmentProfiles[0]?.id ?? null);
+			: null;
 	const environmentVars = environmentProfileId
 		? config.environmentProfiles.find((p) => p.id === environmentProfileId)?.vars
 		: undefined;
