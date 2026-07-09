@@ -349,6 +349,20 @@ const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
 const VERCEL_AI_GATEWAY_BASE = "https://ai-gateway.vercel.sh/v1";
 
 /**
+ * A gateway profile's baseUrl is user-editable, so it must never be treated
+ * as a trusted provider host by itself. Any process.env platform credential
+ * must only be released when baseUrl's host really is the provider's own
+ * trusted host.
+ */
+function isTrustedHost(baseUrl: string, trustedUrl: string): boolean {
+	try {
+		return new URL(baseUrl).hostname === new URL(trustedUrl).hostname;
+	} catch {
+		return false;
+	}
+}
+
+/**
  * Resolve the LLM upstream (key + base URL) for a machine's agent.
  *
  * - codex / claude-code are locked to their native API (OpenAI Responses /
@@ -428,30 +442,45 @@ function gatewayProfileToUpstream(
 ): UpstreamProvider {
 	const ai = config.aiProviderKeys ?? {};
 	if (profile.kind === "vercel-ai-gateway") {
+		const baseUrl = profile.baseUrl ?? VERCEL_AI_GATEWAY_BASE;
 		return {
 			key:
 				profile.apiKey ??
 				ai.vercelAiGateway ??
-				process.env.AI_GATEWAY_API_KEY?.trim() ??
-				process.env.VERCEL_OIDC_TOKEN?.trim() ??
-				process.env.AI_GATEWAY_KEY?.trim() ??
+				(isTrustedHost(baseUrl, VERCEL_AI_GATEWAY_BASE)
+					? (process.env.AI_GATEWAY_API_KEY?.trim() ??
+						process.env.VERCEL_OIDC_TOKEN?.trim() ??
+						process.env.AI_GATEWAY_KEY?.trim())
+					: undefined) ??
 				"",
-			baseUrl: profile.baseUrl ?? VERCEL_AI_GATEWAY_BASE,
+			baseUrl,
 		};
 	}
 	// openai-compatible: explicit profile key, else infer from the base URL.
 	const baseUrl = profile.baseUrl ?? OPENAI_BASE;
 	let key = profile.apiKey ?? "";
 	if (!key) {
-		if (baseUrl.includes("openrouter")) key = ai.openrouter ?? process.env.OPENROUTER_API_KEY?.trim() ?? "";
-		else if (baseUrl.includes("openai.com")) key = ai.openai ?? process.env.OPENAI_API_KEY?.trim() ?? "";
+		if (baseUrl.includes("openrouter")) {
+			key =
+				ai.openrouter ??
+				(isTrustedHost(baseUrl, OPENROUTER_BASE) ? process.env.OPENROUTER_API_KEY?.trim() : undefined) ??
+				"";
+		}
+		else if (baseUrl.includes("openai.com")) {
+			key =
+				ai.openai ??
+				(isTrustedHost(baseUrl, OPENAI_BASE) ? process.env.OPENAI_API_KEY?.trim() : undefined) ??
+				"";
+		}
 		else if (baseUrl.includes("dedalus")) key = "";
 		else if (baseUrl.includes("ai-gateway.vercel")) {
 			key =
 				ai.vercelAiGateway ??
-				process.env.AI_GATEWAY_API_KEY?.trim() ??
-				process.env.VERCEL_OIDC_TOKEN?.trim() ??
-				process.env.AI_GATEWAY_KEY?.trim() ??
+				(isTrustedHost(baseUrl, VERCEL_AI_GATEWAY_BASE)
+					? (process.env.AI_GATEWAY_API_KEY?.trim() ??
+						process.env.VERCEL_OIDC_TOKEN?.trim() ??
+						process.env.AI_GATEWAY_KEY?.trim())
+					: undefined) ??
 				"";
 		}
 		else key = ai.custom?.key ?? "";

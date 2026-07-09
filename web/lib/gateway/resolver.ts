@@ -12,11 +12,26 @@ import {
 	DEFAULT_ROUTER_ID,
 	ROUTER_PRESETS,
 	routerPresetById,
+	UPSTREAM_BASE_URL,
 	type RouterPreset,
 	type RouterSource,
 } from "@/lib/agents/upstreams";
 import { getUserConfig } from "@/lib/user-config/clerk";
 import { type GatewayProfile } from "@/lib/user-config/schema";
+
+/**
+ * A gateway profile's baseUrl is user-editable, so it must never be treated
+ * as the trusted host by itself. Any process.env platform credential must
+ * only be released when baseUrl's host really is the provider's own host.
+ */
+function isTrustedHost(baseUrl: string | null, trustedUrl: string): boolean {
+	if (!baseUrl) return false;
+	try {
+		return new URL(baseUrl).hostname === new URL(trustedUrl).hostname;
+	} catch {
+		return false;
+	}
+}
 
 export type GatewayEnv = {
 	apiUrl: string;
@@ -133,16 +148,20 @@ function fromProfile(
 ): GatewayEnv {
 	const model = profile.model || machineModel;
 	if (profile.kind === "vercel-ai-gateway") {
+		const base = normalizeOpenAiBase(profile.baseUrl ?? UPSTREAM_BASE_URL.vercelAiGateway);
 		const key =
 			profile.apiKey ??
-			keyForRouterSource("vercelAiGateway", config) ??
+			keyForRouterSource(
+				"vercelAiGateway",
+				config,
+				isTrustedHost(base, UPSTREAM_BASE_URL.vercelAiGateway),
+			) ??
 			null;
 		if (!key) {
 			throw new Error(
 				"Vercel AI Gateway profile has no API key and no VERCEL_OIDC_TOKEN.",
 			);
 		}
-		const base = normalizeOpenAiBase(profile.baseUrl ?? "https://ai-gateway.vercel.sh");
 		return {
 			apiUrl: base,
 			model,
@@ -191,7 +210,9 @@ function fromRouterPreset(
 	if (!preset.baseUrl) {
 		throw new Error(`Router preset '${preset.label}' needs a saved custom profile.`);
 	}
-	const apiKey = keyForRouterSource(preset.source, config);
+	// preset.baseUrl is a fixed, hardcoded ROUTER_PRESETS entry, never user
+	// input, so the platform env-var fallback is safe to allow here.
+	const apiKey = keyForRouterSource(preset.source, config, true);
 	if (!apiKey) {
 		throw new Error(`Router preset '${preset.label}' is missing an API key.`);
 	}
@@ -217,21 +238,37 @@ function fromRouterPreset(
 function keyForRouterSource(
 	source: RouterSource,
 	config: Awaited<ReturnType<typeof getUserConfig>>,
+	// Platform process.env secrets must only be released when the caller has
+	// already verified the associated baseUrl really is the provider's own
+	// trusted host — see isTrustedHost. Callers with a fixed/hardcoded baseUrl
+	// (router presets) may pass true; callers with a user-editable baseUrl
+	// must gate this per-request.
+	allowPlatformEnvFallback: boolean,
 ): string {
 	const ai = config.aiProviderKeys;
 	switch (source) {
 		case "vercelAiGateway":
 			return (
 				ai.vercelAiGateway ??
-				process.env.AI_GATEWAY_API_KEY?.trim() ??
-				process.env.VERCEL_OIDC_TOKEN?.trim() ??
-				process.env.AI_GATEWAY_KEY?.trim() ??
+				(allowPlatformEnvFallback
+					? (process.env.AI_GATEWAY_API_KEY?.trim() ??
+						process.env.VERCEL_OIDC_TOKEN?.trim() ??
+						process.env.AI_GATEWAY_KEY?.trim())
+					: undefined) ??
 				""
 			);
 		case "openrouter":
-			return ai.openrouter ?? process.env.OPENROUTER_API_KEY?.trim() ?? "";
+			return (
+				ai.openrouter ??
+				(allowPlatformEnvFallback ? process.env.OPENROUTER_API_KEY?.trim() : undefined) ??
+				""
+			);
 		case "openai":
-			return ai.openai ?? process.env.OPENAI_API_KEY?.trim() ?? "";
+			return (
+				ai.openai ??
+				(allowPlatformEnvFallback ? process.env.OPENAI_API_KEY?.trim() : undefined) ??
+				""
+			);
 		case "google":
 			return ai.google ?? "";
 		case "custom":
@@ -244,14 +281,22 @@ function inferKey(
 	config: Awaited<ReturnType<typeof getUserConfig>>,
 ): string {
 	const lower = baseUrl?.toLowerCase() ?? "";
-	if (lower.includes("openrouter")) return keyForRouterSource("openrouter", config);
-	if (lower.includes("openai.com")) return keyForRouterSource("openai", config);
+	if (lower.includes("openrouter")) {
+		return keyForRouterSource("openrouter", config, isTrustedHost(baseUrl, UPSTREAM_BASE_URL.openrouter));
+	}
+	if (lower.includes("openai.com")) {
+		return keyForRouterSource("openai", config, isTrustedHost(baseUrl, UPSTREAM_BASE_URL.openai));
+	}
 	if (lower.includes("dedalus")) return "";
 	if (lower.includes("ai-gateway.vercel")) {
-		return keyForRouterSource("vercelAiGateway", config);
+		return keyForRouterSource(
+			"vercelAiGateway",
+			config,
+			isTrustedHost(baseUrl, UPSTREAM_BASE_URL.vercelAiGateway),
+		);
 	}
-	if (lower.includes("googleapis")) return keyForRouterSource("google", config);
-	return keyForRouterSource("custom", config);
+	if (lower.includes("googleapis")) return keyForRouterSource("google", config, false);
+	return keyForRouterSource("custom", config, false);
 }
 
 function normalizeOpenAiBase(value: string): string {
