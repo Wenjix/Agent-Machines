@@ -258,9 +258,9 @@ function catalogSources(
 	return dedupeSources(sources.filter((source) => source.baseUrl));
 }
 
-function isTrustedVercelGatewayHost(baseUrl: string): boolean {
+function isTrustedHost(baseUrl: string, trustedUrl: string): boolean {
 	try {
-		return new URL(baseUrl).hostname === new URL(UPSTREAM_BASE_URL.vercelAiGateway).hostname;
+		return new URL(baseUrl).hostname === new URL(trustedUrl).hostname;
 	} catch {
 		return false;
 	}
@@ -279,7 +279,7 @@ function sourceFromProfile(
 			apiKey:
 				profile.apiKey ??
 				config.aiProviderKeys.vercelAiGateway ??
-				(isTrustedVercelGatewayHost(baseUrl)
+				(isTrustedHost(baseUrl, UPSTREAM_BASE_URL.vercelAiGateway)
 					? (process.env.AI_GATEWAY_API_KEY?.trim() ??
 						process.env.VERCEL_OIDC_TOKEN?.trim() ??
 						process.env.AI_GATEWAY_KEY?.trim())
@@ -349,16 +349,24 @@ function sourceFromRouter(
 function inferKey(baseUrl: string, config: UserConfig): string {
 	const lower = baseUrl.toLowerCase();
 	if (lower.includes("openrouter")) {
-		return config.aiProviderKeys.openrouter ?? process.env.OPENROUTER_API_KEY?.trim() ?? "";
+		return (
+			config.aiProviderKeys.openrouter ??
+			(isTrustedHost(baseUrl, UPSTREAM_BASE_URL.openrouter)
+				? process.env.OPENROUTER_API_KEY?.trim()
+				: undefined) ??
+			""
+		);
 	}
 	if (lower.includes("openai.com")) return config.aiProviderKeys.openai ?? "";
 	if (lower.includes("dedalus")) return "";
 	if (lower.includes("ai-gateway.vercel")) {
 		return (
 			config.aiProviderKeys.vercelAiGateway ??
-			process.env.AI_GATEWAY_API_KEY?.trim() ??
-			process.env.VERCEL_OIDC_TOKEN?.trim() ??
-			process.env.AI_GATEWAY_KEY?.trim() ??
+			(isTrustedHost(baseUrl, UPSTREAM_BASE_URL.vercelAiGateway)
+				? (process.env.AI_GATEWAY_API_KEY?.trim() ??
+					process.env.VERCEL_OIDC_TOKEN?.trim() ??
+					process.env.AI_GATEWAY_KEY?.trim())
+				: undefined) ??
 			""
 		);
 	}
