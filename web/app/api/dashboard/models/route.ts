@@ -258,21 +258,32 @@ function catalogSources(
 	return dedupeSources(sources.filter((source) => source.baseUrl));
 }
 
+function isTrustedVercelGatewayHost(baseUrl: string): boolean {
+	try {
+		return new URL(baseUrl).hostname === new URL(UPSTREAM_BASE_URL.vercelAiGateway).hostname;
+	} catch {
+		return false;
+	}
+}
+
 function sourceFromProfile(
 	profile: GatewayProfile,
 	config: UserConfig,
 ): CatalogSource {
 	if (profile.kind === "vercel-ai-gateway") {
+		const baseUrl = profile.baseUrl ?? UPSTREAM_BASE_URL.vercelAiGateway;
 		return {
 			id: profile.id,
 			label: profile.name || "Vercel AI Gateway",
-			baseUrl: profile.baseUrl ?? UPSTREAM_BASE_URL.vercelAiGateway,
+			baseUrl,
 			apiKey:
 				profile.apiKey ??
 				config.aiProviderKeys.vercelAiGateway ??
-				process.env.AI_GATEWAY_API_KEY?.trim() ??
-				process.env.VERCEL_OIDC_TOKEN?.trim() ??
-				process.env.AI_GATEWAY_KEY?.trim() ??
+				(isTrustedVercelGatewayHost(baseUrl)
+					? (process.env.AI_GATEWAY_API_KEY?.trim() ??
+						process.env.VERCEL_OIDC_TOKEN?.trim() ??
+						process.env.AI_GATEWAY_KEY?.trim())
+					: undefined) ??
 				"",
 		};
 	}
