@@ -272,15 +272,18 @@ function sourceFromProfile(
 ): CatalogSource {
 	if (profile.kind === "vercel-ai-gateway") {
 		const baseUrl = profile.baseUrl ?? UPSTREAM_BASE_URL.vercelAiGateway;
+		// Both the user's own saved key AND any platform env fallback must be
+		// withheld unless baseUrl is verified to be the real Vercel AI Gateway
+		// host — a crafted baseUrl must not receive either kind of credential.
 		return {
 			id: profile.id,
 			label: profile.name || "Vercel AI Gateway",
 			baseUrl,
 			apiKey:
 				profile.apiKey ??
-				config.aiProviderKeys.vercelAiGateway ??
 				(isTrustedHost(baseUrl, UPSTREAM_BASE_URL.vercelAiGateway)
-					? (process.env.AI_GATEWAY_API_KEY?.trim() ??
+					? (config.aiProviderKeys.vercelAiGateway ??
+						process.env.AI_GATEWAY_API_KEY?.trim() ??
 						process.env.VERCEL_OIDC_TOKEN?.trim() ??
 						process.env.AI_GATEWAY_KEY?.trim())
 					: undefined) ??
@@ -348,29 +351,32 @@ function sourceFromRouter(
 
 function inferKey(baseUrl: string, config: UserConfig): string {
 	const lower = baseUrl.toLowerCase();
+	// Every branch below withholds BOTH the user's own saved key and any
+	// platform env fallback unless baseUrl is verified against that
+	// provider's real host — a crafted/lookalike host gets neither. Only the
+	// final "custom" fallback is intentionally ungated: it exists precisely
+	// for the user's own arbitrary OpenAI-compatible endpoint.
 	if (lower.includes("openrouter")) {
-		return (
-			config.aiProviderKeys.openrouter ??
-			(isTrustedHost(baseUrl, UPSTREAM_BASE_URL.openrouter)
-				? process.env.OPENROUTER_API_KEY?.trim()
-				: undefined) ??
-			""
-		);
+		return isTrustedHost(baseUrl, UPSTREAM_BASE_URL.openrouter)
+			? (config.aiProviderKeys.openrouter ?? process.env.OPENROUTER_API_KEY?.trim() ?? "")
+			: "";
 	}
-	if (lower.includes("openai.com")) return config.aiProviderKeys.openai ?? "";
+	if (lower.includes("openai.com")) {
+		return isTrustedHost(baseUrl, UPSTREAM_BASE_URL.openai) ? (config.aiProviderKeys.openai ?? "") : "";
+	}
 	if (lower.includes("dedalus")) return "";
 	if (lower.includes("ai-gateway.vercel")) {
-		return (
-			config.aiProviderKeys.vercelAiGateway ??
-			(isTrustedHost(baseUrl, UPSTREAM_BASE_URL.vercelAiGateway)
-				? (process.env.AI_GATEWAY_API_KEY?.trim() ??
-					process.env.VERCEL_OIDC_TOKEN?.trim() ??
-					process.env.AI_GATEWAY_KEY?.trim())
-				: undefined) ??
-			""
-		);
+		return isTrustedHost(baseUrl, UPSTREAM_BASE_URL.vercelAiGateway)
+			? (config.aiProviderKeys.vercelAiGateway ??
+				process.env.AI_GATEWAY_API_KEY?.trim() ??
+				process.env.VERCEL_OIDC_TOKEN?.trim() ??
+				process.env.AI_GATEWAY_KEY?.trim() ??
+				"")
+			: "";
 	}
-	if (lower.includes("googleapis")) return config.aiProviderKeys.google ?? "";
+	if (lower.includes("googleapis")) {
+		return isTrustedHost(baseUrl, UPSTREAM_BASE_URL.google) ? (config.aiProviderKeys.google ?? "") : "";
+	}
 	return config.aiProviderKeys.custom?.key ?? "";
 }
 

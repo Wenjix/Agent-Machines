@@ -441,14 +441,19 @@ function gatewayProfileToUpstream(
 	config: UserConfig,
 ): UpstreamProvider {
 	const ai = config.aiProviderKeys ?? {};
+	// Every branch below withholds BOTH the user's own saved key and any
+	// platform env fallback unless baseUrl is verified against that
+	// provider's real host — only the final "custom" fallback is
+	// intentionally ungated, since it exists for the user's own arbitrary
+	// OpenAI-compatible endpoint.
 	if (profile.kind === "vercel-ai-gateway") {
 		const baseUrl = profile.baseUrl ?? VERCEL_AI_GATEWAY_BASE;
 		return {
 			key:
 				profile.apiKey ??
-				ai.vercelAiGateway ??
 				(isTrustedHost(baseUrl, VERCEL_AI_GATEWAY_BASE)
-					? (process.env.AI_GATEWAY_API_KEY?.trim() ??
+					? (ai.vercelAiGateway ??
+						process.env.AI_GATEWAY_API_KEY?.trim() ??
 						process.env.VERCEL_OIDC_TOKEN?.trim() ??
 						process.env.AI_GATEWAY_KEY?.trim())
 					: undefined) ??
@@ -461,27 +466,22 @@ function gatewayProfileToUpstream(
 	let key = profile.apiKey ?? "";
 	if (!key) {
 		if (baseUrl.includes("openrouter")) {
-			key =
-				ai.openrouter ??
-				(isTrustedHost(baseUrl, OPENROUTER_BASE) ? process.env.OPENROUTER_API_KEY?.trim() : undefined) ??
-				"";
+			key = isTrustedHost(baseUrl, OPENROUTER_BASE)
+				? (ai.openrouter ?? process.env.OPENROUTER_API_KEY?.trim() ?? "")
+				: "";
 		}
 		else if (baseUrl.includes("openai.com")) {
-			key =
-				ai.openai ??
-				(isTrustedHost(baseUrl, OPENAI_BASE) ? process.env.OPENAI_API_KEY?.trim() : undefined) ??
-				"";
+			key = isTrustedHost(baseUrl, OPENAI_BASE) ? (ai.openai ?? process.env.OPENAI_API_KEY?.trim() ?? "") : "";
 		}
 		else if (baseUrl.includes("dedalus")) key = "";
 		else if (baseUrl.includes("ai-gateway.vercel")) {
-			key =
-				ai.vercelAiGateway ??
-				(isTrustedHost(baseUrl, VERCEL_AI_GATEWAY_BASE)
-					? (process.env.AI_GATEWAY_API_KEY?.trim() ??
-						process.env.VERCEL_OIDC_TOKEN?.trim() ??
-						process.env.AI_GATEWAY_KEY?.trim())
-					: undefined) ??
-				"";
+			key = isTrustedHost(baseUrl, VERCEL_AI_GATEWAY_BASE)
+				? (ai.vercelAiGateway ??
+					process.env.AI_GATEWAY_API_KEY?.trim() ??
+					process.env.VERCEL_OIDC_TOKEN?.trim() ??
+					process.env.AI_GATEWAY_KEY?.trim() ??
+					"")
+				: "";
 		}
 		else key = ai.custom?.key ?? "";
 	}

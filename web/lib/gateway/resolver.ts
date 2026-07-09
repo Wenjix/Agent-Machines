@@ -238,39 +238,32 @@ function fromRouterPreset(
 function keyForRouterSource(
 	source: RouterSource,
 	config: Awaited<ReturnType<typeof getUserConfig>>,
-	// Platform process.env secrets must only be released when the caller has
+	// Both the user's own saved config.aiProviderKeys.* AND any platform
+	// process.env.* fallback must only be released when the caller has
 	// already verified the associated baseUrl really is the provider's own
-	// trusted host — see isTrustedHost. Callers with a fixed/hardcoded baseUrl
-	// (router presets) may pass true; callers with a user-editable baseUrl
-	// must gate this per-request.
-	allowPlatformEnvFallback: boolean,
+	// trusted host — see isTrustedHost. Callers with a fixed/hardcoded
+	// baseUrl (router presets) may pass true; callers with a user-editable
+	// baseUrl must gate this per-request. "custom" is exempt: it exists
+	// precisely for the user's own arbitrary OpenAI-compatible endpoint, so
+	// it's always allowed regardless of this flag.
+	trustedHost: boolean,
 ): string {
 	const ai = config.aiProviderKeys;
 	switch (source) {
 		case "vercelAiGateway":
-			return (
-				ai.vercelAiGateway ??
-				(allowPlatformEnvFallback
-					? (process.env.AI_GATEWAY_API_KEY?.trim() ??
-						process.env.VERCEL_OIDC_TOKEN?.trim() ??
-						process.env.AI_GATEWAY_KEY?.trim())
-					: undefined) ??
-				""
-			);
+			return trustedHost
+				? (ai.vercelAiGateway ??
+					process.env.AI_GATEWAY_API_KEY?.trim() ??
+					process.env.VERCEL_OIDC_TOKEN?.trim() ??
+					process.env.AI_GATEWAY_KEY?.trim() ??
+					"")
+				: "";
 		case "openrouter":
-			return (
-				ai.openrouter ??
-				(allowPlatformEnvFallback ? process.env.OPENROUTER_API_KEY?.trim() : undefined) ??
-				""
-			);
+			return trustedHost ? (ai.openrouter ?? process.env.OPENROUTER_API_KEY?.trim() ?? "") : "";
 		case "openai":
-			return (
-				ai.openai ??
-				(allowPlatformEnvFallback ? process.env.OPENAI_API_KEY?.trim() : undefined) ??
-				""
-			);
+			return trustedHost ? (ai.openai ?? process.env.OPENAI_API_KEY?.trim() ?? "") : "";
 		case "google":
-			return ai.google ?? "";
+			return trustedHost ? (ai.google ?? "") : "";
 		case "custom":
 			return ai.custom?.key ?? "";
 	}
@@ -295,7 +288,9 @@ function inferKey(
 			isTrustedHost(baseUrl, UPSTREAM_BASE_URL.vercelAiGateway),
 		);
 	}
-	if (lower.includes("googleapis")) return keyForRouterSource("google", config, false);
+	if (lower.includes("googleapis")) {
+		return keyForRouterSource("google", config, isTrustedHost(baseUrl, UPSTREAM_BASE_URL.google));
+	}
 	return keyForRouterSource("custom", config, false);
 }
 
