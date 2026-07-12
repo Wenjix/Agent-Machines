@@ -28,28 +28,28 @@ type Props = {
 type AgentPortraitMeta = {
 	label: string;
 	mark: CompositeMark;
-	accent: "default" | "purple" | "amber" | "green";
+	accent: "default" | "purple" | "amber" | "neutral";
 };
 
 const META: Record<HeroAgent, AgentPortraitMeta> = {
 	hermes: { label: "Hermes", mark: "nous", accent: "default" },
 	openclaw: { label: "OpenClaw", mark: "openclaw", accent: "purple" },
-	"claude-code": { label: "Claude Code", mark: "anthropic", accent: "amber" },
-	codex: { label: "Codex CLI", mark: "openai", accent: "green" },
+	"claude-code": { label: "Claude Code", mark: "claudecode", accent: "amber" },
+	codex: { label: "Codex CLI", mark: "codex", accent: "neutral" },
 };
 
 const ACCENT_BORDER: Record<AgentPortraitMeta["accent"], string> = {
 	default: "border-[var(--ret-border)] hover:border-[var(--ret-border-hover)]",
 	purple: "border-[var(--ret-purple)]/55 shadow-[0_0_24px_var(--ret-purple-glow)] hover:border-[var(--ret-purple)]",
 	amber: "border-[var(--ret-amber)]/55 shadow-[0_0_24px_rgba(245,158,11,0.12)] hover:border-[var(--ret-amber)]",
-	green: "border-[var(--ret-green)]/55 shadow-[0_0_24px_rgba(34,197,94,0.12)] hover:border-[var(--ret-green)]",
+	neutral: "border-[var(--ret-border-hover)] hover:border-[var(--ret-text-muted)]",
 };
 
 const ACCENT_DOT: Record<AgentPortraitMeta["accent"], string> = {
-	default: "bg-[var(--ret-green)]",
+	default: "bg-[var(--ret-border-strong)]",
 	purple: "bg-[var(--ret-purple)]",
 	amber: "bg-[var(--ret-amber)]",
-	green: "bg-[var(--ret-green)]",
+	neutral: "bg-[var(--ret-border-strong)]",
 };
 
 export function HeroAgentPortrait({ agent, onToggle }: Props) {
@@ -95,7 +95,7 @@ export function HeroAgentPortrait({ agent, onToggle }: Props) {
 						)}
 						aria-hidden="true"
 					>
-						<Logo mark={META[a].mark} size={9} />
+						<Logo mark={META[a].mark} size={9} tone="native" />
 					</span>
 				))}
 			</span>

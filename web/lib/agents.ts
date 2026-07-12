@@ -7,7 +7,7 @@ import type { AgentKind, AgentMeta, AgentOperationModel } from "@/lib/types";
  * and the command-toggle panel. Agents are grouped by operation
  * model: autonomous agents have a built-in driver that wakes
  * them up on schedule; task-driven CLIs require per-task human
- * instruction but can be automated via headless/exec flags.
+ * instruction but can be automated via headless command flags.
  */
 export const AGENTS: ReadonlyArray<AgentMeta> = [
 	{
@@ -17,13 +17,12 @@ export const AGENTS: ReadonlyArray<AgentMeta> = [
 		operationModel: "autonomous",
 		tagline: "memory . cron . sessions . MCP-native",
 		capabilities: "Self-improving agent with persistent memory, cron scheduling, session history, MCP host, subagents, and FTS5 search. Works with any OpenAI-compatible endpoint -- 30+ providers out of the box.",
-		providerKeys: ["DEDALUS_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"],
+		providerKeys: ["AI_GATEWAY_API_KEY", "OPENROUTER_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"],
 		providerOptions: [
-			{ key: "DEDALUS_API_KEY", label: "Dedalus Router", hint: "routes 200+ models with one key via api.dedaluslabs.ai/v1" },
-			{ key: "AI_GATEWAY_API_KEY", label: "Vercel AI Gateway", hint: "200+ models, OIDC auth, provider failover -- vercel.com/ai-gateway" },
+			{ key: "AI_GATEWAY_API_KEY", label: "Vercel AI Gateway", hint: "preferred gateway, OIDC auth, provider failover -- vercel.com/ai-gateway" },
+			{ key: "OPENROUTER_API_KEY", label: "OpenRouter", hint: "fallback gateway to 200+ models" },
 			{ key: "OPENAI_API_KEY", label: "OpenAI direct", hint: "platform.openai.com" },
 			{ key: "ANTHROPIC_API_KEY", label: "Anthropic direct", hint: "console.anthropic.com" },
-			{ key: "OPENROUTER_API_KEY", label: "OpenRouter", hint: "gateway to 200+ models" },
 			{ key: "AI_GATEWAY_URL + AI_GATEWAY_KEY", label: "Any OpenAI-compatible", hint: "LiteLLM, Portkey, RelayPlane, self-hosted" },
 		],
 		installCmd: "curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash",
@@ -49,13 +48,12 @@ export const AGENTS: ReadonlyArray<AgentMeta> = [
 		operationModel: "autonomous",
 		tagline: "computer use . browser . shell . vision",
 		capabilities: "Autonomous agent with browser, screenshot, shell, vision, and computer-use. Multi-channel gateway (Telegram, Slack, WhatsApp) with baked-in skills and scheduling. Accepts any provider key.",
-		providerKeys: ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "DEDALUS_API_KEY"],
+		providerKeys: ["AI_GATEWAY_API_KEY", "OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY"],
 		providerOptions: [
-			{ key: "ANTHROPIC_API_KEY", label: "Anthropic direct", hint: "console.anthropic.com -- default provider" },
-			{ key: "AI_GATEWAY_API_KEY", label: "Vercel AI Gateway", hint: "200+ models, OIDC auth, provider failover -- vercel.com/ai-gateway" },
+			{ key: "AI_GATEWAY_API_KEY", label: "Vercel AI Gateway", hint: "preferred gateway, OIDC auth, provider failover -- vercel.com/ai-gateway" },
+			{ key: "OPENROUTER_API_KEY", label: "OpenRouter", hint: "fallback gateway to 200+ models" },
+			{ key: "ANTHROPIC_API_KEY", label: "Anthropic direct", hint: "console.anthropic.com" },
 			{ key: "OPENAI_API_KEY", label: "OpenAI direct", hint: "platform.openai.com" },
-			{ key: "DEDALUS_API_KEY", label: "Dedalus Router", hint: "set ANTHROPIC_BASE_URL to api.dedaluslabs.ai/v1" },
-			{ key: "OPENROUTER_API_KEY", label: "OpenRouter", hint: "gateway to 200+ models" },
 			{ key: "AI_GATEWAY_URL + AI_GATEWAY_KEY", label: "Any OpenAI-compatible", hint: "LiteLLM, Portkey, self-hosted" },
 		],
 		installCmd: "npm install -g openclaw@latest",
@@ -79,8 +77,8 @@ export const AGENTS: ReadonlyArray<AgentMeta> = [
 		name: "Claude Code",
 		by: "Anthropic",
 		operationModel: "task-driven",
-		tagline: "agentic coding . file edit . shell . SDK",
-		capabilities: "Terminal coding agent with deep repo awareness, multi-step tool use, and the Agent SDK for programmatic headless execution. Can be automated via cron + claude -p --dangerously-skip-permissions.",
+		tagline: "edit repos . run shell . SDK . headless",
+		capabilities: "Terminal coding agent with deep repo awareness, multi-step tool use, and the Agent SDK for programmatic headless runs. Can be automated via cron + claude -p --dangerously-skip-permissions.",
 		providerKeys: ["ANTHROPIC_API_KEY"],
 		providerOptions: [
 			{ key: "ANTHROPIC_API_KEY", label: "Anthropic API key", hint: "console.anthropic.com/settings/keys" },
@@ -91,7 +89,7 @@ export const AGENTS: ReadonlyArray<AgentMeta> = [
 		headlessCmd: 'claude -p "task description"',
 		docsUrl: "https://code.claude.com/docs/",
 		githubUrl: "https://github.com/anthropics/claude-code",
-		logoMark: "anthropic",
+		logoMark: "claudecode",
 		serviceSlug: "anthropic",
 		nativeToolNames: [
 			"terminal", "read_file", "write_file", "patch", "search",
@@ -105,8 +103,8 @@ export const AGENTS: ReadonlyArray<AgentMeta> = [
 		name: "Codex CLI",
 		by: "OpenAI",
 		operationModel: "task-driven",
-		tagline: "agentic coding . sandbox . exec mode",
-		capabilities: "Terminal coding agent with sandbox isolation, workspace-write and full-access modes. Non-interactive via codex exec for CI/CD and automation. JSONL output for programmatic parsing.",
+		tagline: "ship tasks . sandbox . JSONL . CI",
+		capabilities: "Terminal coding agent with sandbox isolation, workspace-write and full-access modes. Non-interactive runs via codex exec for CI/CD and automation. JSONL output for programmatic parsing.",
 		providerKeys: ["OPENAI_API_KEY"],
 		providerOptions: [
 			{ key: "OPENAI_API_KEY", label: "OpenAI API key", hint: "platform.openai.com/api-keys" },
@@ -117,7 +115,7 @@ export const AGENTS: ReadonlyArray<AgentMeta> = [
 		headlessCmd: 'codex exec "task description"',
 		docsUrl: "https://developers.openai.com/codex/",
 		githubUrl: "https://github.com/openai/codex",
-		logoMark: "openai",
+		logoMark: "codex",
 		serviceSlug: "openai",
 		nativeToolNames: [
 			"terminal", "read_file", "write_file", "patch", "search",

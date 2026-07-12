@@ -24,10 +24,10 @@ type StationDef = {
 // so the active logo lands exactly on the camera→origin axis and reads dead
 // center in the (portrait) hero cell instead of floating above it.
 const STATIONS: StationDef[] = [
-	{ agent: "hermes", mark: "nous", tone: "currentColor", theta: 0, phi: 0, hue: "#7c8cf8", label: "Hermes", href: "https://github.com/NousResearch/hermes-agent" },
-	{ agent: "openclaw", mark: "openclaw", tone: "currentColor", theta: (Math.PI * 2) / 5, phi: 0, hue: "#e5443b", label: "OpenClaw", href: "https://github.com/openclaw/openclaw" },
-	{ agent: "claude-code", mark: "anthropic", tone: "currentColor", theta: (Math.PI * 4) / 5, phi: 0, hue: "#d4a574", label: "Claude Code", href: "https://www.anthropic.com/claude-code" },
-	{ agent: "codex", mark: "openai", tone: "currentColor", theta: (Math.PI * 6) / 5, phi: 0, hue: "#4ae0a0", label: "Codex CLI", href: "https://github.com/openai/codex" },
+	{ agent: "hermes", mark: "nous", tone: "native", theta: 0, phi: 0, hue: "#7c8cf8", label: "Hermes", href: "https://github.com/NousResearch/hermes-agent" },
+	{ agent: "openclaw", mark: "openclaw", tone: "native", theta: (Math.PI * 2) / 5, phi: 0, hue: "#e5443b", label: "OpenClaw", href: "https://github.com/openclaw/openclaw" },
+	{ agent: "claude-code", mark: "claudecode", tone: "native", theta: (Math.PI * 4) / 5, phi: 0, hue: "#d4a574", label: "Claude Code", href: "https://www.anthropic.com/claude-code" },
+	{ agent: "codex", mark: "codex", tone: "native", theta: (Math.PI * 6) / 5, phi: 0, hue: "#a1a1aa", label: "Codex CLI", href: "https://github.com/openai/codex" },
 	{ agent: null, mark: "cursor", tone: "currentColor", theta: (Math.PI * 8) / 5, phi: 0, hue: "#d2beff", label: "Cursor", href: "https://cursor.com" },
 ];
 
@@ -74,7 +74,7 @@ const SUBSTRATE_VISUAL: Record<SubstrateId, SubstrateModel> = {
 	sprites: {
 		outer: () => new THREE.IcosahedronGeometry(0.62, 1),
 		inner: () => new THREE.IcosahedronGeometry(0.32, 0),
-		hue: "#22c55e",
+		hue: "#a1a1aa",
 		spin: 0.26,
 	},
 	dedalus: {
@@ -266,11 +266,19 @@ function LogoChip({
 }
 
 /** Agent brand face (cursor gets its bespoke glyph). */
-function AgentFace({ mark, size }: { mark: Mark; size: number }) {
+function AgentFace({
+	mark,
+	size,
+	tone,
+}: {
+	mark: Mark;
+	size: number;
+	tone: StationDef["tone"];
+}) {
 	return mark === "cursor" ? (
 		<CursorIcon size={size} />
 	) : (
-		<Logo mark={mark} size={size} tone="currentColor" />
+		<Logo mark={mark} size={size} tone={tone} />
 	);
 }
 
@@ -315,7 +323,7 @@ function LogoStation({
 					}}
 				>
 					<LogoChip glow={active} hue={station.hue} size={56}>
-						<AgentFace mark={station.mark} size={32} />
+						<AgentFace mark={station.mark} size={32} tone={station.tone} />
 					</LogoChip>
 				</div>
 			</Html>
@@ -858,7 +866,7 @@ function AgentGear({
 								title={active ? `Open ${s.label} ↗` : `Show ${s.label}`}
 								onClick={() => (active ? openSite(s.href) : onSelect?.(i))}
 							>
-								<AgentFace mark={s.mark} size={active ? 40 : 32} />
+								<AgentFace mark={s.mark} size={active ? 40 : 32} tone={s.tone} />
 							</GearChip>
 						</group>
 					</group>

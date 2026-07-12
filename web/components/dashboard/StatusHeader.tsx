@@ -2,37 +2,31 @@
 
 import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Logo } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { BrailleSpinner } from "@/components/ui/BrailleSpinner";
 import { DASHBOARD_SHELL_HEADER_ROW } from "@/lib/dashboard/shell-chrome";
 import { headerDivider } from "@/lib/dashboard/header-chrome";
 import { cn } from "@/lib/cn";
 import { withMachineId } from "@/lib/dashboard/api-url";
-import { usePathname } from "next/navigation";
-
 import type {
 	GatewaySummary,
 	MachineSummary,
 } from "@/lib/dashboard/types";
-import type { AgentKind, PublicMachineRef } from "@/lib/user-config/schema";
+import type { PublicMachineRef } from "@/lib/user-config/schema";
 
-import { AgentSwitcher } from "./AgentSwitcher";
 import { CommandPalette } from "./CommandPalette";
 import { FleetStatusStrip } from "./FleetStatusStrip";
-import { MachineSwitcher } from "./MachineSwitcher";
-import { ModelSwitcher } from "./ModelSwitcher";
+import { GatewayStrip } from "./GatewayStrip";
 import { StatusPill } from "./StatusPill";
 
-const POLL_MS = 5000;
 const CLERK_READY = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
 const MACHINE_PATH_RE = /^\/dashboard\/machines\/([^/]+)/;
+const POLL_MS = 5000;
 
 type Props = {
-	/** Fallback agent for the switcher label when the URL machine isn't resolved. */
-	agentKind: AgentKind;
 	machines?: PublicMachineRef[];
 };
 
@@ -43,21 +37,17 @@ type State = {
 };
 
 /**
- * Top bar for /dashboard/*. Brand lockup lives in the sidebar (lg+); here
- * we show breadcrumbs, status, and controls. Polls machine + gateway every
- * five seconds; pauses while the tab is hidden.
+ * Fleet and machine header. Machine routes keep global context here while the
+ * model/machine/agent selectors live beside the machine identity in the sidebar.
  */
-export function StatusHeader({ agentKind, machines }: Props) {
+export function StatusHeader({ machines = [] }: Props) {
 	const pathname = usePathname();
 	const machineMatch = MACHINE_PATH_RE.exec(pathname);
-	const urlMachine = machineMatch
-		? machines?.find((m) => m.id === machineMatch[1])
+	const machineId = machineMatch?.[1] ?? null;
+	const urlMachine = machineId
+		? machines.find((machine) => machine.id === machineId)
 		: undefined;
-	// In machine view the header is scoped to the URL machine; on fleet
-	// pages there is no single machine in context, so we never fall back to
-	// the implicit active machine for the machine-scoped controls.
-	const inMachineView = Boolean(urlMachine);
-	const scopedMachineId = urlMachine?.id ?? null;
+	const inMachineView = Boolean(machineId);
 	const [state, setState] = useState<State>({
 		machine: null,
 		gateway: null,
@@ -65,7 +55,7 @@ export function StatusHeader({ agentKind, machines }: Props) {
 	});
 
 	useEffect(() => {
-		if (!inMachineView) {
+		if (!machineId) {
 			setState({ machine: null, gateway: null, error: null });
 			return;
 		}
@@ -73,24 +63,24 @@ export function StatusHeader({ agentKind, machines }: Props) {
 
 		async function tick() {
 			try {
-				const [m, g] = await Promise.all([
-					fetch(withMachineId("/api/dashboard/machine", scopedMachineId), {
+				const [machineResult, gatewayResult] = await Promise.all([
+					fetch(withMachineId("/api/dashboard/machine", machineId), {
 						cache: "no-store",
-					}).then((r) =>
-						r.ok ? (r.json() as Promise<MachineSummary>) : null,
+					}).then((response) =>
+						response.ok ? (response.json() as Promise<MachineSummary>) : null,
 					),
-					fetch(withMachineId("/api/dashboard/gateway", scopedMachineId), {
+					fetch(withMachineId("/api/dashboard/gateway", machineId), {
 						cache: "no-store",
-					}).then((r) =>
-						r.ok ? (r.json() as Promise<GatewaySummary>) : null,
+					}).then((response) =>
+						response.ok ? (response.json() as Promise<GatewaySummary>) : null,
 					),
 				]);
 				if (stopped) return;
-				setState({ machine: m, gateway: g, error: null });
-			} catch (err) {
+				setState({ machine: machineResult, gateway: gatewayResult, error: null });
+			} catch (error) {
 				if (stopped) return;
-				const message = err instanceof Error ? err.message : "fetch_failed";
-				setState((prev) => ({ ...prev, error: message }));
+				const message = error instanceof Error ? error.message : "fetch_failed";
+				setState((previous) => ({ ...previous, error: message }));
 			}
 		}
 
@@ -108,20 +98,19 @@ export function StatusHeader({ agentKind, machines }: Props) {
 			window.clearInterval(interval);
 			document.removeEventListener("visibilitychange", onVisible);
 		};
-	}, [scopedMachineId, inMachineView]);
+	}, [machineId]);
 
 	const machinePhase = state.machine?.phase ?? "loading";
-	const gateway = state.gateway;
 
 	return (
 		<header
 			className={cn(
 				DASHBOARD_SHELL_HEADER_ROW,
-				"sticky top-0 z-40 justify-between gap-3",
-				"bg-[var(--ret-bg)]/90 px-4 backdrop-blur-md md:px-5",
+				"sticky top-0 z-40 flex-wrap content-center justify-between gap-x-3 gap-y-2",
+				"bg-[var(--ret-bg)]/90 px-4 py-1.5 backdrop-blur-md md:px-5",
 			)}
 		>
-			<div className="flex min-w-0 flex-1 items-center gap-3">
+			<div className="flex min-w-0 flex-[1_1_340px] items-center gap-3">
 				<Link
 					href="/"
 					className="shrink-0 transition-opacity hover:opacity-80 lg:hidden"
@@ -133,7 +122,7 @@ export function StatusHeader({ agentKind, machines }: Props) {
 					aria-label="Dashboard location"
 					className="flex min-w-0 items-center gap-2 text-[13px] text-[var(--ret-text-dim)]"
 				>
-					{urlMachine ? (
+					{inMachineView ? (
 						<>
 							<Link
 								href="/dashboard/machines"
@@ -144,8 +133,8 @@ export function StatusHeader({ agentKind, machines }: Props) {
 							<span className="text-[var(--ret-text-muted)]" aria-hidden>
 								/
 							</span>
-							<span className="truncate font-medium text-[var(--ret-text)] max-w-[140px] md:max-w-[220px]">
-								{urlMachine.name}
+							<span className="max-w-[140px] truncate font-medium text-[var(--ret-text)] md:max-w-[220px]">
+								{urlMachine?.name ?? machineId}
 							</span>
 						</>
 					) : (
@@ -155,26 +144,17 @@ export function StatusHeader({ agentKind, machines }: Props) {
 				{inMachineView ? (
 					<StatusPill
 						phase={machinePhase}
-						className="shrink-0 text-[12px] font-medium"
+						className="shrink-0 whitespace-nowrap text-[12px] font-medium"
 					/>
 				) : null}
-				<div className="ml-1 hidden shrink-0 sm:block">
+				<div className="ml-1 hidden min-w-[150px] flex-1 sm:block md:max-w-[240px] xl:max-w-[280px]">
 					<CommandPalette />
 				</div>
 			</div>
 
-			<div className="flex shrink-0 items-center gap-2">
+			<div className="hidden min-w-0 flex-[1_1_520px] flex-wrap items-center justify-end gap-2 md:flex">
 				{inMachineView ? (
-					<>
-						<GatewayStrip data={gateway} />
-						<span className={headerDivider} aria-hidden />
-						<ModelSwitcher activeMachineId={scopedMachineId} />
-						<MachineSwitcher />
-						<AgentSwitcher
-							value={urlMachine?.agentKind ?? agentKind}
-							activeMachineId={scopedMachineId ?? undefined}
-						/>
-					</>
+					<GatewayStrip data={state.gateway} />
 				) : (
 					<>
 						<FleetStatusStrip />
@@ -214,6 +194,9 @@ const FLEET_CRUMB: Record<string, string> = {
 	"/dashboard/mcps": "MCPs",
 	"/dashboard/cron": "Cron",
 	"/dashboard/setup": "Setup",
+	"/dashboard/workers": "Workers",
+	"/dashboard/benchmarks": "Benchmarks",
+	"/dashboard/memory": "Memory",
 };
 
 function FleetBreadcrumb({ pathname }: { pathname: string }) {
@@ -238,38 +221,5 @@ function FleetBreadcrumb({ pathname }: { pathname: string }) {
 				{pathname.split("/").pop()}
 			</span>
 		</>
-	);
-}
-
-function GatewayStrip({ data }: { data: GatewaySummary | null }) {
-	if (!data) {
-		return (
-			<BrailleSpinner
-				name="orbit"
-				label="gateway"
-				className="hidden text-[11px] text-[var(--ret-text-muted)] md:inline-flex"
-			/>
-		);
-	}
-	const ok = data.ok;
-	return (
-		<div
-			className="hidden items-center gap-2 text-[12px] text-[var(--ret-text-muted)] md:flex"
-			title={data.apiHost}
-		>
-			<span
-				className={cn(
-					"h-1.5 w-1.5 shrink-0",
-					ok ? "bg-[var(--ret-green)]" : "bg-[var(--ret-red)]",
-				)}
-				aria-hidden
-			/>
-			<span className={ok ? "text-[var(--ret-text)]" : "text-[var(--ret-red)]"}>
-				Gateway
-			</span>
-			<span className="text-[var(--ret-text-muted)]">
-				{ok ? `${data.latencyMs} ms` : "offline"}
-			</span>
-		</div>
 	);
 }

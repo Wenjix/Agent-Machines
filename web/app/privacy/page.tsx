@@ -1,5 +1,3 @@
-import type { Metadata } from "next";
-
 import {
 	DocList,
 	DocListItem,
@@ -7,20 +5,22 @@ import {
 	PublicDocPage,
 } from "@/components/PublicDocPage";
 import { LEGAL_EFFECTIVE_DATE, SITE } from "@/lib/seo/config";
+import { buildPageMetadata } from "@/lib/seo/metadata";
 
-export const metadata: Metadata = {
+export const metadata = buildPageMetadata({
 	title: "Privacy Policy",
 	description:
 		"Privacy policy for Agent Machines, including account data, provider keys, machine data, artifacts, and third-party services.",
-	alternates: { canonical: "/privacy" },
-};
+	path: "/privacy",
+	keywords: ["Agent Machines privacy", "agent machine data", "provider keys"],
+});
 
 export default function PrivacyPage() {
 	return (
 		<PublicDocPage
 			kicker="PRIVACY"
 			title="Privacy Policy."
-			description="This page explains what Agent Machines stores, where it lives, and which third-party services may process it. Tiny goblin footnote: the machine is durable, so delete what you do not want preserved."
+			description="This page explains what Agent Machines stores, where it lives, and which third-party services may process it. Durable machines preserve files, so delete anything you do not want retained."
 			badge={`effective ${LEGAL_EFFECTIVE_DATE}`}
 			aside={
 				<div className="space-y-3">
@@ -74,7 +74,7 @@ export default function PrivacyPage() {
 				<DocSection title="how data is used">
 					<DocList>
 						<DocListItem>
-							Authenticate you and route you to your dashboard.
+							Authenticate you and send you to your dashboard.
 						</DocListItem>
 						<DocListItem>
 							Provision, wake, sleep, inspect, and select machines.
@@ -94,7 +94,7 @@ export default function PrivacyPage() {
 					<p>
 						Agent Machines does not sell personal data. Data is shared with
 						service providers only as needed to run the product, host machines,
-						authenticate users, route requests, or execute tools you invoke.
+						authenticate users, send requests, or run tools you invoke.
 					</p>
 					<p>
 						Model providers and tool providers may receive prompts, files,

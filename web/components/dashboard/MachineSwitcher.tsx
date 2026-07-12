@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Logo } from "@/components/Logo";
@@ -16,6 +16,7 @@ import {
 	headerPopover,
 	headerPopoverTitle,
 } from "@/lib/dashboard/header-chrome";
+import { useSidebarPopoverStyle } from "@/lib/dashboard/sidebar-popover";
 import { cn } from "@/lib/cn";
 import {
 	AGENT_LABEL,
@@ -77,15 +78,24 @@ const STATE_TONE: Record<string, string> = {
 	unknown: "muted",
 };
 
-const AGENT_MARK: Record<AgentKind, "nous" | "openclaw" | "anthropic" | "openai"> = {
+const AGENT_MARK: Record<AgentKind, "nous" | "openclaw" | "claudecode" | "codex"> = {
 	hermes: "nous",
 	openclaw: "openclaw",
-	"claude-code": "anthropic",
-	codex: "openai",
+	"claude-code": "claudecode",
+	codex: "codex",
 };
 
-export function MachineSwitcher() {
+type Props = {
+	currentMachineId?: string | null;
+	surface?: "header" | "sidebar";
+};
+
+export function MachineSwitcher({
+	currentMachineId = null,
+	surface = "header",
+}: Props) {
 	const router = useRouter();
+	const pathname = usePathname();
 	const [data, setData] = useState<Payload | null>(null);
 	const [open, setOpen] = useState(false);
 	const [pendingId, setPendingId] = useState<string | null>(null);
@@ -133,6 +143,17 @@ export function MachineSwitcher() {
 		};
 	}, [open]);
 
+	const targetPathFor = useCallback(
+		(machineId: string): string | null => {
+			if (!currentMachineId) return null;
+			return pathname.replace(
+				/^\/dashboard\/machines\/[^/]+/,
+				`/dashboard/machines/${machineId}`,
+			);
+		},
+		[currentMachineId, pathname],
+	);
+
 	const setActive = useCallback(
 		async (machineId: string): Promise<void> => {
 			setPendingId(machineId);
@@ -144,7 +165,9 @@ export function MachineSwitcher() {
 				});
 				if (!response.ok) throw new Error(`HTTP ${response.status}`);
 				await refresh();
-				router.refresh();
+				const targetPath = targetPathFor(machineId);
+				if (targetPath && targetPath !== pathname) router.push(targetPath);
+				else router.refresh();
 				setOpen(false);
 			} catch {
 				// Surface failure via the spinner staying down; the
@@ -153,40 +176,66 @@ export function MachineSwitcher() {
 				setPendingId(null);
 			}
 		},
-		[refresh, router],
+		[pathname, refresh, router, targetPathFor],
 	);
 
 	const machines = data?.machines.filter((m) => !m.archived) ?? [];
 	const active = machines.find((m) => m.id === data?.activeMachineId) ?? null;
+	const displayed =
+		machines.find((m) => m.id === currentMachineId) ?? active ?? null;
+	const sidebar = surface === "sidebar";
+	const sidebarPopoverStyle = useSidebarPopoverStyle({
+		anchorRef: triggerRef,
+		enabled: sidebar,
+		open,
+		width: 320,
+	});
 
 	return (
-		<div className="relative">
+		<div className="relative min-w-0 max-w-full">
 			<button
 				ref={triggerRef}
 				type="button"
 				onClick={() => setOpen((v) => !v)}
 				aria-haspopup="listbox"
 				aria-expanded={open}
-				className={headerControlTrigger(open)}
+				className={cn(
+					headerControlTrigger(open),
+					sidebar && "h-8 w-full min-w-0 justify-start overflow-hidden px-2",
+				)}
 				title={
-					active
-						? `Active: ${active.name}. Click to switch machine.`
-						: "Pick a machine"
+					displayed
+						? `${currentMachineId ? "Viewing" : "Active"}: ${displayed.name}. Click to switch machine.`
+					: "Pick a machine"
 				}
 			>
-				<span className={headerControlKicker}>Machine</span>
-				<span className={cn(headerControlValue, "hidden max-w-[140px] md:inline")}>
-					{active?.name ?? "none"}
+				<span
+					className={cn(
+						headerControlKicker,
+						sidebar && "w-[58px] shrink-0 tracking-[0.16em]",
+					)}
+				>
+					Machine
 				</span>
-				{active ? (
+				<span
+					className={cn(
+						headerControlValue,
+						sidebar
+							? "min-w-0 flex-1 text-right"
+							: "hidden max-w-[140px] md:inline",
+					)}
+				>
+					{displayed?.name ?? "none"}
+				</span>
+				{displayed ? (
 					<StateDot
-						state={active.live.ok ? active.live.state : "unknown"}
+						state={displayed.live.ok ? displayed.live.state : "unknown"}
 					/>
 				) : null}
 				<svg
 					viewBox="0 0 12 12"
 					className={cn(
-						"h-2.5 w-2.5 transition-transform",
+						"h-2.5 w-2.5 shrink-0 transition-transform",
 						open ? "rotate-180" : "rotate-0",
 					)}
 					fill="none"
@@ -203,7 +252,17 @@ export function MachineSwitcher() {
 				<div
 					ref={popoverRef}
 					role="listbox"
-					className={cn(headerPopover, "mt-1 w-[320px]")}
+					style={sidebarPopoverStyle}
+					className={cn(
+						headerPopover,
+						"mt-1 max-w-[calc(100vw-24px)] overflow-hidden",
+						sidebar
+							? cn(
+								"!fixed !right-auto !top-auto w-auto",
+								!sidebarPopoverStyle && "pointer-events-none invisible",
+							)
+							: "w-[320px]",
+					)}
 				>
 					<header
 						className={cn(
@@ -214,7 +273,7 @@ export function MachineSwitcher() {
 						<span>fleet</span>
 						<span>{machines.length} total</span>
 					</header>
-					<ul className="max-h-[420px] overflow-y-auto">
+					<ul className="max-h-[min(420px,55dvh)] overflow-y-auto">
 						{machines.length === 0 ? (
 							<li className="px-3 py-4 text-[12px] italic text-[var(--ret-text-muted)]">
 								No machines yet. Use Spin up below.
@@ -222,16 +281,17 @@ export function MachineSwitcher() {
 						) : null}
 						{machines.map((machine) => {
 							const isActive = machine.id === data?.activeMachineId;
+							const isViewing = machine.id === displayed?.id;
 							const stateName = machine.live.ok ? machine.live.state : "unknown";
 							const memGib = (machine.spec.memoryMib / 1024).toFixed(1);
 							return (
 								<li
 									key={machine.id}
 									role="option"
-									aria-selected={isActive}
+									aria-selected={isViewing}
 									className={cn(
 										"flex flex-col gap-1 border-b border-[var(--ret-border)] px-3 py-2 transition-colors",
-										isActive
+										isViewing
 											? "bg-[var(--ret-purple-glow)]"
 											: "hover:bg-[var(--ret-surface)]",
 										pendingId === machine.id && "opacity-60",
@@ -249,31 +309,39 @@ export function MachineSwitcher() {
 									<button
 										type="button"
 										onClick={() => void setActive(machine.id)}
-										disabled={pendingId === machine.id || isActive}
-										className="flex w-full items-start gap-2 text-left disabled:cursor-default"
+										disabled={pendingId === machine.id || (isViewing && isActive)}
+										className="flex w-full min-w-0 items-start gap-2 text-left disabled:cursor-default"
 									>
 										<StateDot state={stateName} className="mt-1" />
 										<div className="min-w-0 flex-1">
-											<p className="flex items-center gap-1.5 font-mono text-[12px] text-[var(--ret-text)]">
-												<span className="truncate">{machine.name}</span>
-												{isActive ? (
+											<p className="flex min-w-0 items-center gap-1.5 font-mono text-[12px] text-[var(--ret-text)]">
+												<span className="min-w-0 truncate" title={machine.name}>
+													{machine.name}
+												</span>
+												{isViewing ? (
+													<span className="shrink-0 border border-[var(--ret-purple)]/45 bg-[var(--ret-purple-glow)] px-1 text-[8px] uppercase tracking-[0.22em] text-[var(--ret-purple)]">
+														viewing
+													</span>
+												) : null}
+												{isActive && !isViewing ? (
 													<span className="shrink-0 border border-[var(--ret-purple)]/45 bg-[var(--ret-purple-glow)] px-1 text-[8px] uppercase tracking-[0.22em] text-[var(--ret-purple)]">
 														active
 													</span>
 												) : null}
 											</p>
-											<p className="mt-0.5 flex items-center gap-1.5 font-mono text-[10px] text-[var(--ret-text-muted)]">
+											<p className="mt-0.5 flex min-w-0 items-center gap-1.5 font-mono text-[10px] text-[var(--ret-text-muted)]">
 												<Logo
 													mark={AGENT_MARK[machine.agentKind]}
 													size={10}
+													className="shrink-0"
 												/>
-												<span>{AGENT_LABEL[machine.agentKind]}</span>
+												<span className="truncate">{AGENT_LABEL[machine.agentKind]}</span>
 												<span>.</span>
-												<span>
+												<span className="shrink-0">
 													{machine.spec.vcpu}v . {memGib}G
 												</span>
 												<span>.</span>
-												<span className="capitalize">{stateName}</span>
+												<span className="shrink-0 capitalize">{stateName}</span>
 											</p>
 											<p
 												className="truncate font-mono text-[9px] text-[var(--ret-text-muted)]"
@@ -286,7 +354,7 @@ export function MachineSwitcher() {
 									<MachineActions
 										machineId={machine.id}
 										state={stateName as MachineActionState}
-											capabilities={machine.capabilities}
+										capabilities={machine.capabilities}
 										active={isActive}
 										compact
 										onChange={async () => {
@@ -294,6 +362,13 @@ export function MachineSwitcher() {
 											router.refresh();
 										}}
 									/>
+									<Link
+										href={`/dashboard/machines/${machine.id}/console`}
+										onClick={() => setOpen(false)}
+										className="self-end font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--ret-purple)] hover:underline"
+									>
+										talk
+									</Link>
 								</li>
 							);
 						})}

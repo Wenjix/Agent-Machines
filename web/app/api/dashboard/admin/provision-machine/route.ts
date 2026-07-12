@@ -15,12 +15,17 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { after } from "next/server";
 
 import { getEffectiveUserId } from "@/lib/user-config/identity";
 
-import { MachineProviderError } from "@/lib/providers";
+import { agentUsesRouter } from "@/lib/agents/upstreams";
+import { MachineProviderError, getProvider } from "@/lib/providers";
+import { scheduleWebBootstrap } from "@/lib/bootstrap/schedule-bootstrap";
 import { createMachineForConfig } from "@/lib/dashboard/provision";
-import { getUserConfig } from "@/lib/user-config/clerk";
+import { primeConsoleSession } from "@/lib/dashboard/terminal-session";
+import { recommendArm } from "@/lib/learning/recommend";
+import { getUserConfig, setUserConfig } from "@/lib/user-config/clerk";
 import {
 	AGENT_KINDS,
 	DEFAULT_MACHINE_SPEC,
@@ -32,7 +37,7 @@ import {
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 type Body = {
 	providerKind?: ProviderKind;
@@ -43,6 +48,10 @@ type Body = {
 	force?: boolean;
 	/** Chosen model router (gateway profile id) for hermes/openclaw. */
 	gatewayProfileId?: string;
+	/** Saved environment profile whose vars should be installed on the VM. */
+	environmentProfileId?: string | null;
+	/** Fill omitted runtime/substrate/model/router axes from the learned policy. */
+	autoRoute?: boolean;
 };
 
 function isProvider(value: unknown): value is ProviderKind {
@@ -96,17 +105,34 @@ export async function POST(request: Request): Promise<Response> {
 		);
 	}
 
-	const providerKind: ProviderKind = isProvider(body.providerKind)
-		? body.providerKind
-		: config.draftProviderKind;
-	const agentKind: AgentKind = isAgent(body.agentKind)
-		? body.agentKind
-		: config.draftAgentKind;
-	const spec = asSpec(body.spec, config.draftSpec ?? DEFAULT_MACHINE_SPEC);
-	const model =
+	const explicitModel =
 		typeof body.model === "string" && body.model.trim().length > 0
 			? body.model.trim()
-			: config.draftModel;
+			: undefined;
+	const rec =
+		body.autoRoute === true
+			? await recommendArm(config, {
+					runtime: isAgent(body.agentKind) ? body.agentKind : undefined,
+					substrate: isProvider(body.providerKind) ? body.providerKind : undefined,
+					model: explicitModel,
+					routerId:
+						typeof body.gatewayProfileId === "string"
+							? body.gatewayProfileId
+							: undefined,
+				}).catch(() => null)
+			: null;
+
+	const providerKind: ProviderKind = isProvider(body.providerKind)
+		? body.providerKind
+		: rec?.arm.substrate ?? config.draftProviderKind;
+	const agentKind: AgentKind = isAgent(body.agentKind)
+		? body.agentKind
+		: rec?.arm.runtime ?? config.draftAgentKind;
+	const spec = asSpec(body.spec, config.draftSpec ?? DEFAULT_MACHINE_SPEC);
+	const model = explicitModel ?? rec?.arm.model ?? config.draftModel;
+	const gatewayProfileId =
+		body.gatewayProfileId ??
+		(agentUsesRouter(agentKind) ? rec?.arm.routerId ?? null : null);
 	const name =
 		typeof body.name === "string" && body.name.trim().length > 0
 			? body.name.trim().slice(0, 80)
@@ -151,15 +177,59 @@ export async function POST(request: Request): Promise<Response> {
 			spec,
 			model,
 			name,
-			gatewayProfileId: body.gatewayProfileId ?? null,
+			gatewayProfileId,
+			environmentProfileId: body.environmentProfileId ?? null,
 		});
+		let bootstrapScheduled = false;
+		let bootstrapMessage: string | null = null;
+		try {
+			const latestConfig = await getUserConfig();
+			const machine = latestConfig.machines.find((m) => m.id === created.machineId);
+			if (machine) {
+				const provider = getProvider(machine.providerKind, latestConfig.providers);
+				primeConsoleSession(provider, machine.id);
+				await setUserConfig({
+					patchMachine: {
+						id: machine.id,
+						patch: {
+							bootstrapState: {
+								...machine.bootstrapState,
+								phase: "running",
+								current: null,
+								finishedAt: null,
+								lastError: null,
+								startedAt: machine.bootstrapState.startedAt ?? new Date().toISOString(),
+							},
+						},
+					},
+				});
+				const scheduledConfig = await getUserConfig();
+				const scheduledMachine =
+					scheduledConfig.machines.find((m) => m.id === machine.id) ?? machine;
+				after(() => scheduleWebBootstrap(scheduledMachine, provider, scheduledConfig));
+				bootstrapScheduled = true;
+			}
+		} catch (scheduleErr) {
+			bootstrapMessage =
+				scheduleErr instanceof Error
+					? scheduleErr.message
+					: "background bootstrap could not be scheduled";
+			console.warn(
+				`[provision-machine] background bootstrap scheduling failed for ${created.machineId}:`,
+				bootstrapMessage,
+			);
+		}
 		return Response.json({
 			ok: true,
 			machineId: created.machineId,
 			phase: created.phase,
 			state: created.state,
+			bootstrapScheduled,
+			bootstrapMessage,
 			message:
-				"Machine accepted. Run browser bootstrap from the dashboard to install the selected agent runtime, or use the CLI deploy path for the full production bootstrap.",
+				bootstrapScheduled
+					? "Machine accepted. Console is priming now; agent runtime install continues in the background."
+					: "Machine accepted. Console is available; run repair bootstrap from the dashboard to install the selected agent runtime.",
 		});
 	} catch (err) {
 		const message =
@@ -169,7 +239,7 @@ export async function POST(request: Request): Promise<Response> {
 					? err.message
 					: "provision failed";
 		const status = err instanceof MachineProviderError && err.kind === "not_supported" ? 501 : 502;
-		// Surface the real reason in Vercel logs — the client only sees the HTTP
+		// Surface the real reason in Vercel logs -- the client only sees the HTTP
 		// status, so an opaque 502 is otherwise undiagnosable in production.
 		console.error(
 			`[provision-machine] ${providerKind}/${agentKind} provision failed (${status}):`,

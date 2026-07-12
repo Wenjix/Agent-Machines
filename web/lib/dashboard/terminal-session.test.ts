@@ -1,14 +1,19 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
 	CONSOLE_LOG,
+	CONSOLE_AGENT_LAUNCHER,
 	CONSOLE_SESSION,
 	clampDim,
 	ensureSessionCommand,
+	installAgentLauncherCommand,
+	isExpectedConsoleStreamEnd,
+	primeConsoleSession,
 	resizeCommand,
 	sendKeysCommand,
 	toHexKeys,
 } from "./terminal-session";
+import type { MachineProvider } from "@/lib/providers/types";
 
 describe("toHexKeys", () => {
 	it("encodes printable text as space-separated hex byte pairs", () => {
@@ -51,6 +56,10 @@ describe("ensureSessionCommand", () => {
 		expect(cmd).toContain(`tmux has-session -t ${CONSOLE_SESSION}`);
 		expect(cmd).toContain(`tmux new-session -d -s ${CONSOLE_SESSION} -x 120 -y 32`);
 		expect(cmd).toContain(`tmux pipe-pane -t ${CONSOLE_SESSION} -o 'cat >> ${CONSOLE_LOG}'`);
+		expect(cmd).toContain("am_console_created=1");
+		expect(cmd).toContain("terminal-agent.json");
+		expect(cmd).toContain("am_status");
+		expect(cmd).toContain("tmux send-keys -t amconsole");
 		expect(cmd).toContain("AM_CONSOLE_READY");
 		expect(cmd).toContain("apt-get install -y tmux");
 	});
@@ -58,6 +67,48 @@ describe("ensureSessionCommand", () => {
 	it("clamps absurd dimensions to safe bounds", () => {
 		const cmd = ensureSessionCommand(99999, 0);
 		expect(cmd).toContain("-x 500 -y 5");
+	});
+});
+
+describe("installAgentLauncherCommand", () => {
+	it("installs a wrapper that records running/exited state", () => {
+		const cmd = installAgentLauncherCommand();
+		expect(cmd).toContain(CONSOLE_AGENT_LAUNCHER);
+		expect(cmd).toContain('kind="${1:-}"');
+		expect(cmd).toContain('state_file="$state_dir/terminal-agent.json"');
+		expect(cmd).toContain("write_state running");
+		expect(cmd).toContain("write_state exited");
+		expect(cmd).toContain("hermes chat");
+		expect(cmd).toContain("openclaw chat");
+		expect(cmd).toContain("claude");
+		expect(cmd).toContain("codex");
+	});
+});
+
+describe("primeConsoleSession", () => {
+	it("uses provider background exec when available", () => {
+		const execBackground = vi.fn().mockResolvedValue(undefined);
+		const provider = { execBackground } as unknown as MachineProvider;
+
+		primeConsoleSession(provider, "machine-1", { cols: 88, rows: 24 });
+
+		expect(execBackground).toHaveBeenCalledWith(
+			"machine-1",
+			expect.stringContaining(`tmux new-session -d -s ${CONSOLE_SESSION} -x 88 -y 24`),
+		);
+	});
+
+	it("falls back to detached exec for providers without background exec", () => {
+		const exec = vi.fn().mockResolvedValue({ stdout: "", stderr: "", exitCode: 0 });
+		const provider = { exec } as unknown as MachineProvider;
+
+		primeConsoleSession(provider, "machine-2");
+
+		expect(exec).toHaveBeenCalledWith(
+			"machine-2",
+			expect.stringContaining("nohup bash -lc"),
+			{ timeoutMs: 5_000 },
+		);
 	});
 });
 
@@ -76,5 +127,27 @@ describe("clampDim", () => {
 		expect(clampDim(9999, 20, 500, 120)).toBe(500);
 		expect(clampDim("nope", 20, 500, 120)).toBe(120);
 		expect(clampDim(40.9, 20, 500, 120)).toBe(40);
+	});
+});
+
+describe("isExpectedConsoleStreamEnd", () => {
+	it("treats provider deadlines from tail -f as reconnect boundaries", () => {
+		expect(
+			isExpectedConsoleStreamEnd(
+				new Error(
+					"e2b streamExec failed on sbx: [deadline_exceeded] the operation timed out",
+				),
+			),
+		).toBe(true);
+		expect(
+			isExpectedConsoleStreamEnd(
+				new Error("sprites streamExec timed out after 110000ms"),
+			),
+		).toBe(true);
+	});
+
+	it("keeps real stream failures visible", () => {
+		expect(isExpectedConsoleStreamEnd(new Error("missing credentials"))).toBe(false);
+		expect(isExpectedConsoleStreamEnd(new Error("machine not found"))).toBe(false);
 	});
 });

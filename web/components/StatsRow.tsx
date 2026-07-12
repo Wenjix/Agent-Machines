@@ -1,401 +1,523 @@
-import type { SVGProps } from "react";
+"use client";
 
-import { Logo } from "@/components/Logo";
+import { Check, Copy } from "lucide-react";
+import { useEffect, useState, type CSSProperties } from "react";
+
 import { ReticleLabel } from "@/components/reticle/ReticleLabel";
-import { SchematicPanel } from "@/components/reticle/SchematicPanel";
-import { ServiceIcon, type ServiceSlug } from "@/components/ServiceIcon";
 import { ToolIcon } from "@/components/ToolIcon";
 import type { ToolCategory } from "@/lib/dashboard/loadout";
+import { cn } from "@/lib/cn";
 
-const SPECS: ReadonlyArray<{
+const INSTALL_CODE = "npm i agent-machines";
+
+const CODE_TEXT = `import { AgentMachines } from "agent-machines"
+
+const am = new AgentMachines()
+
+const agent = await am.create({
+  agent: "hermes",
+  sandbox: "e2b",
+  model: "claude-opus-4.8",
+  persistent: true,
+})
+
+await agent.run("review my code")`;
+
+type CodeTone =
+	| "boolean"
+	| "class"
+	| "identifier"
+	| "keyword"
+	| "method"
+	| "operator"
+	| "property"
+	| "punctuation"
+	| "string";
+
+const CODE_LINES: ReadonlyArray<{
+	no: string;
+	indent?: number;
+	parts: ReadonlyArray<{ text: string; tone?: CodeTone }>;
+}> = [
+	{
+		no: "01",
+		parts: [
+			{ text: "import", tone: "keyword" },
+			{ text: " ", tone: "punctuation" },
+			{ text: "{", tone: "punctuation" },
+			{ text: " AgentMachines ", tone: "class" },
+			{ text: "}", tone: "punctuation" },
+			{ text: " ", tone: "punctuation" },
+			{ text: "from", tone: "keyword" },
+			{ text: " \"agent-machines\"", tone: "string" },
+		],
+	},
+	{ no: "02", parts: [{ text: "" }] },
+	{
+		no: "03",
+		parts: [
+			{ text: "const", tone: "keyword" },
+			{ text: " am", tone: "identifier" },
+			{ text: " = ", tone: "operator" },
+			{ text: "new", tone: "keyword" },
+			{ text: " AgentMachines", tone: "class" },
+			{ text: "()", tone: "punctuation" },
+		],
+	},
+	{ no: "04", parts: [{ text: "" }] },
+	{
+		no: "05",
+		parts: [
+			{ text: "const", tone: "keyword" },
+			{ text: " agent", tone: "identifier" },
+			{ text: " = ", tone: "operator" },
+			{ text: "await", tone: "keyword" },
+			{ text: " am", tone: "identifier" },
+			{ text: ".create", tone: "method" },
+			{ text: "({", tone: "punctuation" },
+		],
+	},
+	{
+		no: "06",
+		indent: 1,
+		parts: [
+			{ text: "agent", tone: "property" },
+			{ text: ": ", tone: "punctuation" },
+			{ text: "\"hermes\"", tone: "string" },
+			{ text: ",", tone: "punctuation" },
+		],
+	},
+	{
+		no: "07",
+		indent: 1,
+		parts: [
+			{ text: "sandbox", tone: "property" },
+			{ text: ": ", tone: "punctuation" },
+			{ text: "\"e2b\"", tone: "string" },
+			{ text: ",", tone: "punctuation" },
+		],
+	},
+	{
+		no: "08",
+		indent: 1,
+		parts: [
+			{ text: "model", tone: "property" },
+			{ text: ": ", tone: "punctuation" },
+			{ text: "\"claude-opus-4.8\"", tone: "string" },
+			{ text: ",", tone: "punctuation" },
+		],
+	},
+	{
+		no: "09",
+		indent: 1,
+		parts: [
+			{ text: "persistent", tone: "property" },
+			{ text: ": ", tone: "punctuation" },
+			{ text: "true", tone: "boolean" },
+			{ text: ",", tone: "punctuation" },
+		],
+	},
+	{ no: "10", parts: [{ text: "})", tone: "punctuation" }] },
+	{ no: "11", parts: [{ text: "" }] },
+	{
+		no: "12",
+		parts: [
+			{ text: "await", tone: "keyword" },
+			{ text: " agent", tone: "identifier" },
+			{ text: ".run", tone: "method" },
+			{ text: "(", tone: "punctuation" },
+			{ text: "\"review my code\"", tone: "string" },
+			{ text: ")", tone: "punctuation" },
+		],
+	},
+];
+
+const READOUTS: ReadonlyArray<{
 	label: string;
 	value: string;
-	description: string;
 	icon: ToolCategory;
 }> = [
 	{
-		label: "Runtime routes",
-		value: "4 agents",
-		description: "Hermes, OpenClaw, Claude Code, and Codex.",
+		label: "package",
+		value: "install",
+		icon: "code",
+	},
+	{
+		label: "recipe",
+		value: "compose",
 		icon: "delegate",
 	},
 	{
-		label: "Substrate routes",
-		value: "4 lanes",
-		description: "E2B, Sprites.dev, Dedalus Machines, and Vercel Sandbox.",
-		icon: "shell",
-	},
-	{
-		label: "Model routes",
-		value: "200+",
-		description: "OpenAI-compatible endpoints via AI Gateway.",
+		label: "model",
+		value: "normalize",
 		icon: "memory",
 	},
 	{
-		label: "Deploy",
-		value: "~30 seconds",
-		description: "One worker unit: runtime, skills, MCP, and cron.",
-		icon: "schedule",
-	},
-	{
-		label: "Skills synced",
-		value: "161",
-		description: "SKILL.md files installed from registries at boot.",
+		label: "state",
+		value: "persist",
 		icon: "filesystem",
 	},
 	{
-		label: "Fleet model",
-		value: "Per-account",
-		description: "One identity, many specialist workers. Clerk-backed.",
-		icon: "delegate",
+		label: "run",
+		value: "run",
+		icon: "shell",
+	},
+	{
+		label: "proof",
+		value: "observe",
+		icon: "search",
 	},
 ];
 
-type StackIcon =
-	| { kind: "logo"; mark: "am" | "cursor" | "dedalus" | "nous" | "openclaw" }
-	| { kind: "service"; slug: ServiceSlug };
-
-type ServiceEntry = {
-	id: string;
-	icon: StackIcon;
-	name: string;
-	role: string;
-	href: string;
-};
-
-type Assembly = "stack" | "pills" | "logos";
-
-type Feature = {
-	Icon: (p: SVGProps<SVGSVGElement>) => React.ReactElement;
+const PIPELINE: ReadonlyArray<{
+	icon: ToolCategory;
+	kicker: string;
 	title: string;
 	body: string;
-	services: ServiceEntry[];
-	assembly: Assembly;
-};
-
-const FEATURES: ReadonlyArray<Feature> = [
+	code: string;
+}> = [
 	{
-		assembly: "stack",
-		Icon: IconRoute,
-		title: "Route runtime and substrate",
-		body: "OpenRouter-style dual routing in one account. Pick an agent runtime, pick a substrate lane, deploy a persistent worker — Vercel on AWS for sandboxes.",
-		services: [
-			{
-				id: "e2b",
-				icon: { kind: "service", slug: "e2b" },
-				name: "E2B",
-				role: "Sandbox substrate for fast ephemeral agent runs",
-				href: "https://e2b.dev",
-			},
-			{
-				id: "sprites",
-				icon: { kind: "service", slug: "sprites" },
-				name: "Sprites",
-				role: "Persistent microVM substrate on Sprites.dev",
-				href: "https://sprites.dev",
-			},
-			{
-				id: "dedalus",
-				icon: { kind: "logo", mark: "dedalus" },
-				name: "Dedalus Machines",
-				role: "Strong default on boot, sleep, and wake — one lane of four",
-				href: "https://docs.dedaluslabs.ai/dcs",
-			},
-			{
-				id: "vercel-sandbox",
-				icon: { kind: "service", slug: "vercel" },
-				name: "Vercel Sandbox",
-				role: "Persistent microVMs with auto-snapshots, getOrCreate, and port URLs",
-				href: "https://vercel.com/docs/vercel-sandbox",
-			},
-		],
+		icon: "code",
+		kicker: "01",
+		title: "Import the client",
+		body: "Use the SDK from any server.",
+		code: INSTALL_CODE,
 	},
 	{
-		assembly: "pills",
-		Icon: IconFleet,
-		title: "Supervise a specialist fleet",
-		body: "One Clerk sign-in. Preset workers for code, design, and ops. Same account on every device — keys, runtime choice, and fleet metadata travel with you.",
-		services: [
-			{
-				id: "clerk",
-				icon: { kind: "service", slug: "clerk" },
-				name: "Clerk",
-				role: "Per-user identity, fleet metadata, and API key storage",
-				href: "https://clerk.com",
-			},
-			{
-				id: "vercel",
-				icon: { kind: "service", slug: "vercel" },
-				name: "Vercel",
-				role: "Hosts the dashboard, AI Gateway, and control-plane APIs",
-				href: "https://vercel.com",
-			},
-			{
-				id: "anthropic",
-				icon: { kind: "service", slug: "anthropic" },
-				name: "Anthropic",
-				role: "Claude models via direct API or AI Gateway routing",
-				href: "https://www.anthropic.com/",
-			},
-		],
+		icon: "delegate",
+		kicker: "02",
+		title: "Shape the worker",
+		body: "Pick runtime, substrate, and model.",
+		code: "am.create({ agent, sandbox, model })",
 	},
 	{
-		assembly: "logos",
-		Icon: IconToolStack,
-		title: "One worker, full harness",
-		body: "Not a bare sandbox — runtime, skills, MCP, cron, gateway, and observation in one deployable unit. State persists under /home/machine across sleep cycles.",
-		services: [
-			{
-				id: "hermes",
-				icon: { kind: "logo", mark: "nous" },
-				name: "Hermes",
-				role: "Memory, cron, sessions, MCP host, and subagents",
-				href: "https://github.com/NousResearch/hermes-agent",
-			},
-			{
-				id: "openclaw",
-				icon: { kind: "logo", mark: "openclaw" },
-				name: "OpenClaw",
-				role: "Browser, shell, vision, and computer-use automation",
-				href: "https://github.com/openclaw/openclaw",
-			},
-			{
-				id: "cursor",
-				icon: { kind: "logo", mark: "cursor" },
-				name: "Cursor SDK",
-				role: "Spawns coding agents for repo edits via MCP bridge",
-				href: "https://cursor.com/docs/sdk/typescript",
-			},
-		],
+		icon: "filesystem",
+		kicker: "03",
+		title: "Keep the worker",
+		body: "Persist files, skills, and memory.",
+		code: "persistent: true",
+	},
+	{
+		icon: "shell",
+		kicker: "04",
+		title: "Run real work",
+		body: "Send the prompt when ready.",
+		code: "await agent.run(prompt)",
 	},
 ];
-
-function StackIconView({
-	icon,
-	size = 16,
-}: { icon: StackIcon; size?: number }) {
-	if (icon.kind === "logo") {
-		return <Logo mark={icon.mark} size={size} />;
-	}
-	return <ServiceIcon slug={icon.slug} size={size} />;
-}
 
 export function StatsRow() {
 	return (
-		<div>
-			{/* Header + control-plane schematic */}
-			<div className="grid grid-cols-1 items-stretch gap-px border-b border-[var(--ret-border)] bg-[var(--ret-border)] lg:grid-cols-[1.05fr_0.95fr]">
-				<div className="flex flex-col justify-center bg-[var(--ret-bg)] px-4 py-8 md:px-6 md:py-12">
-					<ReticleLabel>CONTROL PLANE</ReticleLabel>
-					<h2 className="ret-display mt-3 max-w-[18ch] text-2xl tracking-tight md:text-4xl">
-						OpenRouter for agents and containers.
-					</h2>
-					<p className="mt-4 max-w-[52ch] text-[13px] leading-relaxed text-[var(--ret-text-dim)]">
-						Route the agent runtime and the container substrate from one
-						account, then deploy a persistent worker with its full harness —
-						supervised from a single dashboard.
-					</p>
+		<div className="overflow-hidden border-y border-[var(--ret-border)]">
+			<div className="grid min-h-[600px] grid-cols-1 items-stretch gap-px border-b border-[var(--ret-border)] bg-[var(--ret-border)] lg:grid-cols-[minmax(420px,0.45fr)_minmax(0,0.55fr)] xl:grid-cols-[560px_minmax(0,1fr)]">
+				<div className="relative flex flex-col justify-between overflow-hidden bg-[var(--ret-bg)] px-5 py-8 md:px-8 md:py-10 lg:px-10">
+					<div
+						aria-hidden="true"
+						className="ret-circuit-texture pointer-events-none absolute inset-x-0 bottom-0 h-1/2 opacity-[0.10] mix-blend-multiply invert dark:opacity-[0.16] dark:mix-blend-screen dark:invert-0"
+						style={{ "--ret-circuit-size": "360px 480px" } as CSSProperties}
+					/>
+					<div>
+						<ReticleLabel>SDK</ReticleLabel>
+						<h2 className="ret-display mt-3 max-w-[12ch] text-3xl tracking-tight md:text-5xl lg:text-[60px] lg:leading-[0.95]">
+							Create the worker in code.
+						</h2>
+						<p className="mt-5 max-w-[54ch] text-[14px] leading-relaxed text-[var(--ret-text-dim)]">
+							Create a persistent worker with one typed recipe. Choose the
+							agent, substrate, model, and state policy. The control plane
+							handles boot, gateway, logs, and usage.
+						</p>
+					</div>
+
+					<div className="relative z-10 mt-8 grid gap-3">
+						<div className="grid grid-cols-2 gap-px border border-[var(--ret-border)] bg-[var(--ret-border)]">
+							<RouteFacet label="agent" value="Hermes" />
+							<RouteFacet label="substrate" value="E2B" />
+							<RouteFacet label="model" value="Opus 4.8" />
+							<RouteFacet label="state" value="Persistent" />
+						</div>
+						<div className="grid gap-px border border-[var(--ret-border)] bg-[var(--ret-border)]">
+							{["typed client", "agent + substrate", "server-normalized model", "observable run"].map((item, index) => (
+								<div
+									key={item}
+									className="grid grid-cols-[40px_minmax(0,1fr)] bg-[var(--ret-bg)] px-3 py-2.5 text-[12px]"
+								>
+									<span className="font-mono text-[10px] text-[var(--ret-text-muted)]">
+										{String(index + 1).padStart(2, "0")}
+									</span>
+									<span className="font-medium text-[var(--ret-text)]">
+										{item}
+									</span>
+								</div>
+							))}
+						</div>
+					</div>
 				</div>
-				<div className="flex items-center justify-center bg-[var(--ret-bg)] p-4 md:p-6">
-					<SchematicPanel slug="overview" className="w-full max-w-[440px]" />
+
+				<div className="flex items-center bg-[var(--ret-bg)] p-4 md:p-7 lg:p-9">
+					<CodePanel />
 				</div>
 			</div>
 
-			{/* Instrument readout grid */}
-			<div className="grid grid-cols-2 gap-px border-b border-[var(--ret-border)] bg-[var(--ret-border)] sm:grid-cols-3 lg:grid-cols-6">
-				{SPECS.map((spec) => (
+			<div className="grid grid-cols-1 gap-px border-b border-[var(--ret-border)] bg-[var(--ret-border)] sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+				{READOUTS.map((spec) => (
 					<ReadoutCell key={spec.label} spec={spec} />
 				))}
 			</div>
 
-			{/* Feature cards */}
-			<div className="grid grid-cols-1 gap-px bg-[var(--ret-border)] md:grid-cols-3">
-				{FEATURES.map(({ Icon, title, body, services, assembly }) => (
-					<div
-						key={title}
-						className="flex flex-col bg-[var(--ret-bg)] p-5 md:p-6"
-					>
-						<div className="mb-4 flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--ret-border)] bg-[var(--ret-surface)] text-[var(--ret-text)]">
-							<Icon className="h-4 w-4" />
-						</div>
-						<h3 className="text-[15px] font-semibold tracking-tight text-[var(--ret-text)]">
-							{title}
-						</h3>
-						<p className="mt-1.5 text-[13px] leading-relaxed text-[var(--ret-text-dim)]">
-							{body}
-						</p>
-						<div className="mt-5 flex-1">
-							<ServiceAssembly variant={assembly} services={services} />
-						</div>
-					</div>
+			<div className="grid grid-cols-1 gap-px bg-[var(--ret-border)] md:grid-cols-2 xl:grid-cols-4">
+				{PIPELINE.map((step) => (
+					<PipelineCell key={step.kicker} step={step} />
 				))}
 			</div>
 		</div>
 	);
 }
 
-/* ── Instrument readout cell ── */
-
-function ReadoutCell({ spec }: { spec: (typeof SPECS)[number] }) {
+function RouteFacet({ label, value }: { label: string; value: string }) {
 	return (
-		<div className="flex flex-col gap-1 bg-[var(--ret-bg)] px-4 py-5">
-			<div className="flex items-center gap-1.5">
+		<div className="bg-[var(--ret-bg)] px-3 py-3">
+			<div className="font-mono text-[9px] uppercase tracking-[0.2em] text-[var(--ret-text-muted)]">
+				{label}
+			</div>
+			<div className="mt-1 text-[13px] font-semibold text-[var(--ret-text)]">
+				{value}
+			</div>
+		</div>
+	);
+}
+
+function CodePanel() {
+	const [copied, setCopied] = useState(false);
+
+	useEffect(() => {
+		if (!copied) return;
+		const timeout = window.setTimeout(() => setCopied(false), 1400);
+		return () => window.clearTimeout(timeout);
+	}, [copied]);
+
+	const copyCode = async () => {
+		try {
+			if (navigator.clipboard?.writeText) {
+				await navigator.clipboard.writeText(CODE_TEXT);
+			} else {
+				const textarea = document.createElement("textarea");
+				textarea.value = CODE_TEXT;
+				textarea.setAttribute("readonly", "");
+				textarea.style.position = "fixed";
+				textarea.style.top = "-9999px";
+				document.body.appendChild(textarea);
+				textarea.select();
+				document.execCommand("copy");
+				document.body.removeChild(textarea);
+			}
+			setCopied(true);
+		} catch {
+			setCopied(false);
+		}
+	};
+
+	return (
+		<div className="relative flex min-h-[440px] w-full flex-col overflow-hidden border border-[var(--ret-border)] bg-[var(--ret-bg)] xl:min-h-[480px]">
+			<div
+				aria-hidden="true"
+				className="ret-circuit-texture pointer-events-none absolute inset-0 opacity-[0.12] mix-blend-multiply invert dark:opacity-[0.2] dark:mix-blend-screen dark:invert-0"
+				style={{ "--ret-circuit-size": "320px 426px" } as CSSProperties}
+			/>
+			<div className="relative z-10 flex items-center justify-between border-b border-[var(--ret-border)] bg-[var(--ret-bg)]/86 px-3 py-2 backdrop-blur-sm">
+				<div className="flex items-center gap-2">
+					<ToolIcon name="code" size={13} className="text-[var(--ret-text-dim)]" />
+					<span className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--ret-text-muted)]">
+						agent-machines.ts
+					</span>
+				</div>
+				<span className="font-mono text-[10px] text-[var(--ret-text-muted)]">
+					{"recipe -> worker"}
+				</span>
+			</div>
+			<div className="relative z-10 flex justify-end border-b border-[var(--ret-border)] bg-[var(--ret-bg)]/78 px-3 py-2 backdrop-blur-sm">
+				<button
+					type="button"
+					onClick={() => void copyCode()}
+					className="ret-pressable inline-flex min-h-8 items-center gap-1.5 border border-[var(--ret-border)] bg-[var(--ret-surface)] px-2.5 font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--ret-text-secondary)] hover:border-[var(--ret-border-hover)] hover:bg-[var(--ret-surface-hover)] hover:text-[var(--ret-text)]"
+					aria-label={copied ? "SDK example copied" : "Copy SDK example"}
+				>
+					{copied ? (
+						<Check className="h-3.5 w-3.5" strokeWidth={1.75} />
+					) : (
+						<Copy className="h-3.5 w-3.5" strokeWidth={1.75} />
+					)}
+					<span>{copied ? "copied" : "copy"}</span>
+				</button>
+			</div>
+			<pre className="relative z-10 m-0 flex-1 overflow-hidden bg-[var(--ret-bg)]/82 px-3 py-5 font-mono text-[12px] leading-6 text-[var(--ret-text)] backdrop-blur-sm md:px-6 md:py-6 md:text-[12.5px]">
+				<code className="block">
+					{CODE_LINES.map((line) => (
+						<span key={line.no} className="block min-w-0 whitespace-pre-wrap break-words">
+							<span className="mr-4 select-none text-[var(--ret-text-muted)]">
+								{line.no}
+							</span>
+							<span aria-hidden="true">
+								{"\t".repeat(line.indent ?? 0)}
+							</span>
+							{line.parts.map((part, i) => (
+								<span key={`${line.no}-${i}`} className={codeTone(part.tone)}>
+									{part.text}
+								</span>
+							))}
+						</span>
+					))}
+				</code>
+			</pre>
+			<div className="relative z-10 grid grid-cols-3 gap-px border-t border-[var(--ret-border)] bg-[var(--ret-border)]">
+				<CodeMeter label="auth" value="bearer" />
+				<CodeMeter label="boot" value="phased" />
+				<CodeMeter label="logs" value="attached" />
+			</div>
+		</div>
+	);
+}
+
+function codeTone(tone: (typeof CODE_LINES)[number]["parts"][number]["tone"]) {
+	return cn(
+		tone === "boolean" && "font-semibold text-[var(--ret-text)]",
+		tone === "class" && "font-semibold text-[var(--ret-text)]",
+		tone === "identifier" && "text-[var(--ret-text)]",
+		tone === "keyword" && "font-semibold text-[var(--ret-text)]",
+		tone === "method" && "font-medium text-[var(--ret-text)]",
+		tone === "operator" && "text-[var(--ret-text-muted)]",
+		tone === "property" && "text-[var(--ret-text-secondary)]",
+		tone === "punctuation" && "text-[var(--ret-text-dim)]",
+		tone === "string" && "text-[var(--ret-text-secondary)]",
+	);
+}
+
+function CodeMeter({ label, value }: { label: string; value: string }) {
+	return (
+		<div className="bg-[var(--ret-bg)]/90 px-3 py-2 backdrop-blur-sm">
+			<div className="font-mono text-[9px] uppercase tracking-[0.2em] text-[var(--ret-text-muted)]">
+				{label}
+			</div>
+			<div className="mt-1 font-mono text-[11px] text-[var(--ret-text)]">
+				{value}
+			</div>
+		</div>
+	);
+}
+
+function ReadoutCell({ spec }: { spec: (typeof READOUTS)[number] }) {
+	return (
+		<div className="group relative min-h-[168px] overflow-hidden bg-[var(--ret-bg)] transition-colors duration-300 [transition-timing-function:var(--ret-ease-out)] hover:bg-[var(--ret-bg-soft)]">
+			<div
+				aria-hidden="true"
+				className="ret-circuit-texture pointer-events-none absolute inset-0 opacity-[0.08] mix-blend-multiply invert transition-opacity duration-300 group-hover:opacity-[0.16] dark:opacity-[0.12] dark:mix-blend-screen dark:invert-0 dark:group-hover:opacity-[0.22]"
+				style={{ "--ret-circuit-size": "260px 340px" } as CSSProperties}
+			/>
+			<div className="absolute left-4 top-4 z-10 flex items-center gap-1.5">
 				<ToolIcon name={spec.icon} size={11} className="text-[var(--ret-text-muted)]" />
 				<span className="font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--ret-text-muted)]">
 					{spec.label}
 				</span>
 			</div>
-			<span className="mt-1 text-[22px] font-semibold leading-none tabular-nums tracking-tight text-[var(--ret-text)]">
+			<ReadoutVisual index={READOUTS.indexOf(spec)} />
+			<span className="absolute bottom-4 right-4 z-10 text-right text-[22px] font-semibold leading-none tracking-tight text-[var(--ret-text)]">
 				{spec.value}
 			</span>
-			<span className="text-[11px] leading-snug text-[var(--ret-text-dim)]">
-				{spec.description}
-			</span>
 		</div>
 	);
 }
 
-/* ── Assembled service diagrams ── */
-
-function ServiceAssembly({
-	variant,
-	services,
-}: {
-	variant: Assembly;
-	services: ServiceEntry[];
-}) {
-	switch (variant) {
-		case "stack":
-			return <AssembledStack services={services} />;
-		case "pills":
-			return <AssembledPills services={services} />;
-		case "logos":
-			return <AssembledLogoGrid services={services} />;
-	}
-}
-
-function AssembledStack({ services }: { services: ServiceEntry[] }) {
-	return (
-		<div className="flex flex-col gap-2">
-			{services.map((s) => (
-				<a
-					key={s.id}
-					href={s.href}
-					target="_blank"
-					rel="noreferrer"
-					className="group flex items-center gap-3 rounded-lg border border-[var(--ret-border)] px-3 py-2.5 transition-colors duration-150 hover:border-[var(--ret-purple)]/30 hover:bg-[var(--ret-surface)]"
-				>
-					<StackIconView icon={s.icon} />
-					<div className="min-w-0 flex-1">
-						<p className="text-[12px] font-medium text-[var(--ret-text)] group-hover:text-[var(--ret-purple)]">
-							{s.name}
-						</p>
-						<p className="text-[10px] leading-snug text-[var(--ret-text-muted)]">
-							{s.role}
-						</p>
-					</div>
-				</a>
-			))}
-		</div>
-	);
-}
-
-function AssembledPills({ services }: { services: ServiceEntry[] }) {
-	return (
-		<div className="flex flex-wrap gap-2">
-			{services.map((s) => (
-				<a
-					key={s.id}
-					href={s.href}
-					target="_blank"
-					rel="noreferrer"
-					className="group inline-flex items-center gap-2 rounded-full border border-[var(--ret-border)] bg-[var(--ret-surface)] px-3.5 py-2 transition-colors duration-150 hover:border-[var(--ret-purple)]/30"
-				>
-					<StackIconView icon={s.icon} />
-					<span className="text-[12px] font-medium text-[var(--ret-text)] group-hover:text-[var(--ret-purple)]">
-						{s.name}
-					</span>
-				</a>
-			))}
-		</div>
-	);
-}
-
-function AssembledLogoGrid({ services }: { services: ServiceEntry[] }) {
-	return (
-		<div className="flex items-start gap-5">
-			{services.map((s) => (
-				<a
-					key={s.id}
-					href={s.href}
-					target="_blank"
-					rel="noreferrer"
-					title={`${s.name}: ${s.role}`}
-					className="group flex flex-col items-center gap-2 transition-opacity hover:opacity-80"
-				>
-					<div className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--ret-border)] bg-[var(--ret-surface)]">
-						<StackIconView icon={s.icon} size={18} />
-					</div>
-					<span className="text-[10px] font-medium text-[var(--ret-text-muted)] group-hover:text-[var(--ret-text)]">
-						{s.name}
-					</span>
-				</a>
-			))}
-		</div>
-	);
-}
-
-/* ── SVG Icons ── */
-
-function IconRoute(props: SVGProps<SVGSVGElement>) {
+function ReadoutVisual({ index }: { index: number }) {
+	const variant = index % 6;
 	return (
 		<svg
-			viewBox="0 0 16 16"
+			aria-hidden="true"
+			viewBox="0 0 220 132"
+			className="absolute inset-x-3 top-8 h-[112px] w-[calc(100%-1.5rem)] text-[var(--ret-text-secondary)] opacity-55 transition-[opacity,transform] duration-300 [transition-timing-function:var(--ret-ease-out)] group-hover:translate-y-[-2px] group-hover:opacity-80"
 			fill="none"
-			stroke="currentColor"
-			strokeWidth="1.5"
-			strokeLinecap="round"
-			strokeLinejoin="round"
-			{...props}
 		>
-			<circle cx="4" cy="4" r="2" />
-			<circle cx="12" cy="4" r="2" />
-			<circle cx="8" cy="12" r="2" />
-			<path d="M5.5 5.5 7 10M10.5 5.5 9 10" />
+			<path
+				d="M8 68h44l18-18h40l20 20h82"
+				stroke="currentColor"
+				strokeWidth="1"
+				opacity=".42"
+				vectorEffect="non-scaling-stroke"
+			/>
+			{variant === 0 ? (
+				<>
+					<rect x="58" y="30" width="104" height="58" stroke="currentColor" strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
+					<path d="M74 48h72M74 64h44M74 80h62" stroke="currentColor" strokeWidth="1" opacity=".72" vectorEffect="non-scaling-stroke" />
+					<path d="M42 102h96l18-18h28" stroke="currentColor" strokeWidth="1" opacity=".34" vectorEffect="non-scaling-stroke" />
+				</>
+			) : null}
+			{variant === 1 ? (
+				<>
+					<circle cx="70" cy="44" r="10" stroke="currentColor" strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
+					<circle cx="146" cy="44" r="10" stroke="currentColor" strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
+					<circle cx="108" cy="88" r="12" stroke="currentColor" strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
+					<path d="M80 48l18 26M136 50l-18 24M82 44h54" stroke="currentColor" strokeWidth="1" opacity=".72" vectorEffect="non-scaling-stroke" />
+				</>
+			) : null}
+			{variant === 2 ? (
+				<>
+					<path d="M46 38h126M46 62h88M46 86h126" stroke="currentColor" strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
+					<path d="M170 38l18 24-18 24" stroke="currentColor" strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
+					<circle cx="46" cy="62" r="5" stroke="currentColor" strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
+				</>
+			) : null}
+			{variant === 3 ? (
+				<>
+					<rect x="62" y="32" width="96" height="64" stroke="currentColor" strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
+					<path d="M78 32v-14M96 32v-14M124 96v18M142 96v18M48 52h14M158 76h18" stroke="currentColor" strokeWidth="1" opacity=".75" vectorEffect="non-scaling-stroke" />
+					<path d="M86 64h48" stroke="currentColor" strokeWidth="1.2" opacity=".55" vectorEffect="non-scaling-stroke" />
+				</>
+			) : null}
+			{variant === 4 ? (
+				<>
+					<path d="M48 42h72l34 34h28" stroke="currentColor" strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
+					<path d="M48 80h52" stroke="currentColor" strokeWidth="1.2" opacity=".48" vectorEffect="non-scaling-stroke" />
+					<path d="M106 72l12 8-12 8" stroke="currentColor" strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
+					<circle cx="182" cy="76" r="8" stroke="currentColor" strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
+				</>
+			) : null}
+			{variant === 5 ? (
+				<>
+					<path d="M42 82c18-28 31-28 48 0s30 28 48 0 30-28 48 0" stroke="currentColor" strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
+					<path d="M42 42h144M42 108h144" stroke="currentColor" strokeWidth="1" opacity=".32" vectorEffect="non-scaling-stroke" />
+					<circle cx="90" cy="82" r="4" fill="currentColor" opacity=".75" />
+					<circle cx="138" cy="82" r="4" fill="currentColor" opacity=".75" />
+				</>
+			) : null}
 		</svg>
 	);
 }
 
-function IconFleet(props: SVGProps<SVGSVGElement>) {
+function PipelineCell({ step }: { step: (typeof PIPELINE)[number] }) {
 	return (
-		<svg
-			viewBox="0 0 16 16"
-			fill="none"
-			stroke="currentColor"
-			strokeWidth="1.5"
-			strokeLinecap="round"
-			strokeLinejoin="round"
-			{...props}
-		>
-			<circle cx="5" cy="11" r="2.5" />
-			<path d="M7 9l6.5-6.5M11 5l1.5 1.5M9.5 6.5L11 8" />
-		</svg>
-	);
-}
-
-function IconToolStack(props: SVGProps<SVGSVGElement>) {
-	return (
-		<svg
-			viewBox="0 0 16 16"
-			fill="none"
-			stroke="currentColor"
-			strokeWidth="1.5"
-			strokeLinecap="round"
-			strokeLinejoin="round"
-			{...props}
-		>
-			<path d="M8 2L2 5l6 3 6-3z" />
-			<path d="M2 11l6 3 6-3M2 8l6 3 6-3" />
-		</svg>
+		<div className="group relative min-h-[250px] overflow-hidden bg-[var(--ret-bg)] p-5 transition-colors duration-300 [transition-timing-function:var(--ret-ease-out)] hover:bg-[var(--ret-bg-soft)] md:p-6">
+			<div
+				aria-hidden="true"
+				className="ret-circuit-texture pointer-events-none absolute inset-y-0 right-0 w-1/2 opacity-0 mix-blend-multiply invert transition-opacity duration-200 group-hover:opacity-[0.12] dark:mix-blend-screen dark:invert-0 dark:group-hover:opacity-[0.2]"
+				style={{ "--ret-circuit-size": "300px 400px" } as CSSProperties}
+			/>
+			<div className="relative z-10 mb-8 flex items-center justify-between">
+				<div className="flex h-11 w-11 items-center justify-center border border-[var(--ret-border)] bg-[var(--ret-surface)] text-[var(--ret-text)] transition-transform duration-300 [transition-timing-function:var(--ret-ease-out)] group-hover:-translate-y-1">
+					<ToolIcon name={step.icon} size={15} />
+				</div>
+				<span className="font-mono text-[10px] uppercase tracking-[0.24em] text-[var(--ret-text-muted)]">
+					{step.kicker}
+				</span>
+			</div>
+			<div className="relative z-10">
+				<h3 className="text-[17px] font-semibold tracking-tight text-[var(--ret-text)]">
+					{step.title}
+				</h3>
+				<p className="mt-2 text-[13px] leading-relaxed text-[var(--ret-text-dim)]">
+					{step.body}
+				</p>
+				<div className="mt-7 border border-[var(--ret-border)] bg-[var(--ret-surface)] px-3 py-2.5 font-mono text-[11px] text-[var(--ret-text-secondary)]">
+					{step.code}
+				</div>
+			</div>
+		</div>
 	);
 }

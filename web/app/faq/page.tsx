@@ -1,5 +1,3 @@
-import type { Metadata } from "next";
-
 import {
 	DocList,
 	DocListItem,
@@ -7,20 +5,22 @@ import {
 	PublicDocPage,
 } from "@/components/PublicDocPage";
 import { FAQ, SITE } from "@/lib/seo/config";
+import { buildPageMetadata } from "@/lib/seo/metadata";
 
-export const metadata: Metadata = {
+export const metadata = buildPageMetadata({
 	title: "FAQ",
 	description:
-		"Common questions about Agent Machines, persistent agent state, supported providers, tools, skills, and machine data paths.",
-	alternates: { canonical: "/faq" },
-};
+		"Common questions about Agent Machines, persistent workers, agent runtimes, sandbox providers, model routes, tools, skills, and machine data paths.",
+	path: "/faq",
+	keywords: ["Agent Machines FAQ", "persistent agent FAQ", "sandbox agent FAQ"],
+});
 
 export default function FaqPage() {
 	return (
 		<PublicDocPage
 			kicker="FAQ"
 			title="Common questions."
-			description="Short answers about the current product state. No séance. No vibes-only architecture diagram. Just the machine, the agent, the tools, and the parts that are still landing."
+			description="Short answers about the current product state. The machine, agent, tools, provider lanes, and runtime boundaries stay explicit."
 			badge={`${FAQ.length} answers`}
 			aside={
 				<div className="space-y-3">

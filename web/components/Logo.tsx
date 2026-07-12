@@ -1,5 +1,6 @@
 import Image from "next/image";
 
+import { VercelMark } from "@/components/VercelMark";
 import { cn } from "@/lib/cn";
 
 export type Mark =
@@ -8,6 +9,8 @@ export type Mark =
 	| "nous"
 	| "cursor"
 	| "openclaw"
+	| "claudecode"
+	| "codex"
 	| "anthropic"
 	| "openai"
 	| "e2b"
@@ -30,7 +33,7 @@ type Props = {
 	/**
 	 * "auto" -- pick a recoloring strategy per mark:
 	 *   am, dedalus -> light/dark image swap (mark SVG or baked logo PNG)
-	 *   nous    -> CSS mask + currentColor (true monochrome adoption)
+	 *   nous    -> official SVG in a contrast chip so the portrait is visible
 	 *   cursor  -> light/dark image swap (Cursor ships their own variants)
 	 *
 	 * "currentColor" -- force CSS mask on every mark, useful when you want
@@ -62,6 +65,14 @@ const NATIVE_SRC: Record<Mark, { light: string; dark: string }> = {
 		light: "/brand/openclaw-mark-color.svg",
 		dark: "/brand/openclaw-mark-color.svg",
 	},
+	claudecode: {
+		light: "/brand/claudecode-color.svg",
+		dark: "/brand/claudecode-color.svg",
+	},
+	codex: {
+		light: "/brand/codex-color.svg",
+		dark: "/brand/codex-color.svg",
+	},
 	anthropic: {
 		light: "/brand/services/anthropic.svg",
 		dark: "/brand/services/anthropic.svg",
@@ -90,6 +101,8 @@ const MASK_SRC: Record<Mark, string> = {
 	nous: "/brand/nous-mark.svg",
 	cursor: "/brand/cursor-mark.svg",
 	openclaw: "/brand/openclaw-mark.svg",
+	claudecode: "/brand/claudecode-color.svg",
+	codex: "/brand/codex-color.svg",
 	anthropic: "/brand/services/anthropic.svg",
 	openai: "/brand/services/openai.svg",
 	e2b: "/brand/services/e2b.svg",
@@ -100,9 +113,11 @@ const MASK_SRC: Record<Mark, string> = {
 const DEFAULT_TONE: Record<Mark, NonNullable<Props["tone"]>> = {
 	am: "auto",
 	dedalus: "auto",
-	nous: "currentColor",
+	nous: "native",
 	cursor: "auto",
 	openclaw: "currentColor",
+	claudecode: "currentColor",
+	codex: "currentColor",
 	anthropic: "currentColor",
 	openai: "currentColor",
 	e2b: "native",
@@ -119,6 +134,8 @@ const ARIA_LABEL: Record<Mark, string> = {
 	nous: "Nous Research",
 	cursor: "Cursor",
 	openclaw: "OpenClaw",
+	claudecode: "Claude Code",
+	codex: "Codex CLI",
 	anthropic: "Anthropic",
 	openai: "OpenAI",
 	e2b: "E2B",
@@ -147,12 +164,12 @@ export function Logo({ mark, size = 18, className, tone }: Props) {
 				className={cn("inline-flex items-center", className)}
 				style={{ width: `${pairWidth}px`, height: `${size}px` }}
 			>
-				<Logo mark="nous" size={size} />
+				<Logo mark="nous" size={size} tone={tone} />
 				<span
 					className="inline-flex"
 					style={{ marginLeft: `-${overlap}px` }}
 				>
-					<Logo mark="openclaw" size={size} />
+					<Logo mark="openclaw" size={size} tone={tone} />
 				</span>
 			</span>
 		);
@@ -163,23 +180,42 @@ export function Logo({ mark, size = 18, className, tone }: Props) {
 	const dim = `${size}px`;
 	const aria = ARIA_LABEL[mark as Mark] ?? String(mark);
 
+	if (mark === "vercel" && resolved === "currentColor") {
+		return <VercelMark size={size} className={className} />;
+	}
+
+	if (mark === "nous") {
+		const pad = Math.max(1, Math.round(size * 0.14));
+		const inner = Math.max(1, size - pad * 2);
+		const radius = Math.max(3, Math.round(size * 0.22));
+		return (
+			<span
+				role="img"
+				aria-label={aria}
+				className={cn(
+					"inline-grid shrink-0 place-items-center overflow-hidden bg-white align-middle ring-1 ring-black/10",
+					className,
+				)}
+				style={{
+					width: dim,
+					height: dim,
+					borderRadius: `${radius}px`,
+					boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.72)",
+				}}
+			>
+				<Image
+					src={native.light}
+					alt=""
+					width={inner}
+					height={inner}
+					sizes={`${inner}px`}
+					className="object-contain"
+				/>
+			</span>
+		);
+	}
+
 	if (resolved === "currentColor") {
-		// The Nous mark's source SVG paints a rectangular frame at its
-		// outer bounds (the potrace tracing kept the original raster's
-		// border). When we mask it with currentColor, those frame
-		// columns render as 1px walls on the left and right edges. We
-		// can't kill them at the SVG layer without breaking the head
-		// silhouette (the frame is part of the same compound path), so
-		// we crop them at the CSS layer: render the mask slightly
-		// oversized and let the container's bounds clip the frame off.
-		//
-		// 110% size + centered position drops 5% of the SVG on each
-		// edge -- enough to hide the 4-unit rect frame at every
-		// rendered size from 14px (status header) up to 480px (debug
-		// preview), without visibly clipping the head silhouette
-		// (which sits well inside the SVG bounds).
-		const oversized = mark === "nous";
-		const maskSize = oversized ? "110%" : "contain";
 		return (
 			<span
 				role="img"
@@ -197,8 +233,8 @@ export function Logo({ mark, size = 18, className, tone }: Props) {
 					maskRepeat: "no-repeat",
 					WebkitMaskPosition: "center",
 					maskPosition: "center",
-					WebkitMaskSize: maskSize,
-					maskSize: maskSize,
+					WebkitMaskSize: "contain",
+					maskSize: "contain",
 				}}
 			/>
 		);

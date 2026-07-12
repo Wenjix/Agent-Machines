@@ -16,7 +16,7 @@ import {
 	Zap,
 } from "lucide-react";
 import dynamic from "next/dynamic";
-import { type SVGProps, useEffect, useRef, useState } from "react";
+import { type CSSProperties, type SVGProps, useEffect, useRef, useState } from "react";
 
 import { SignedIn, SignedOut } from "@/components/AuthSwitch";
 import { type HeroAgent } from "@/components/HeroAgentPortrait";
@@ -42,7 +42,7 @@ const AGENT_HUE: Record<HeroAgent, string> = {
 	hermes: "#7c8cf8",
 	openclaw: "#e5443b",
 	"claude-code": "#d4a574",
-	codex: "#4ae0a0",
+	codex: "#a1a1aa",
 };
 
 const AGENT_LABEL: Record<HeroAgent, string> = {
@@ -51,6 +51,18 @@ const AGENT_LABEL: Record<HeroAgent, string> = {
 	"claude-code": "Claude Code",
 	codex: "Codex CLI",
 };
+
+const PUBLIC_NATIVE_MARKS = new Set<CompositeMark>([
+	"agent",
+	"nous",
+	"openclaw",
+	"claudecode",
+	"codex",
+]);
+
+function publicLogoTone(mark: CompositeMark): "native" | undefined {
+	return PUBLIC_NATIVE_MARKS.has(mark) ? "native" : undefined;
+}
 
 /* ── Animated heading word (typewriter delete + retype with per-char animation) ── */
 
@@ -206,11 +218,11 @@ const RAIL_AGENTS: ReadonlyArray<{
 	id: HeroAgent | null;
 	word: string;
 }> = [
-	{ mark: "nous", label: "Hermes", id: "hermes", word: "Persistent" },
-	{ mark: "openclaw", label: "OpenClaw", id: "openclaw", word: "Autonomous" },
-	{ mark: "anthropic", label: "Claude", id: "claude-code", word: "Agentic" },
-	{ mark: "openai", label: "Codex", id: "codex", word: "Sandboxed" },
-	{ mark: "cursor", label: "Cursor", id: null, word: "Routed" },
+	{ mark: "nous", label: "Hermes", id: "hermes", word: "Provision" },
+	{ mark: "openclaw", label: "OpenClaw", id: "openclaw", word: "Orchestrate" },
+	{ mark: "claudecode", label: "Claude", id: "claude-code", word: "Supervise" },
+	{ mark: "codex", label: "Codex", id: "codex", word: "Persistent" },
+	{ mark: "cursor", label: "Cursor", id: null, word: "Automate" },
 ];
 
 const ALL_WORDS = RAIL_AGENTS.map((a) => a.word);
@@ -237,7 +249,7 @@ const SUBSTRATES: ReadonlyArray<{
 	hue: string;
 }> = [
 	{ id: "e2b", item: svc("e2b"), label: "E2B", hue: "#ff8800" },
-	{ id: "sprites", item: svc("sprites"), label: "Sprites", hue: "#22c55e" },
+	{ id: "sprites", item: svc("sprites"), label: "Sprites", hue: "#a1a1aa" },
 	{ id: "dedalus", item: dedalus, label: "Dedalus", hue: "#aaa5e6" },
 	{ id: "vercel", item: svc("vercel"), label: "Vercel", hue: "#ededed" },
 ];
@@ -246,7 +258,7 @@ const SUBSTRATES: ReadonlyArray<{
  * The registry wall, grouped by the job each cluster does. Every group renders
  * as a row of brand marks with a flat "[" bracket + mono verb beneath it (see
  * `ToolGroupBracket`), so the colorful logo wall doubles as a legend of what
- * the platform reaches: Route · Automate · Code · Data · Observe · Browse ·
+ * the platform reaches: Switch · Automate · Code · Data · Observe · Browse ·
  * Render · Sell.
  */
 type ToolGroup = {
@@ -260,8 +272,8 @@ type ToolGroup = {
 };
 
 const REGISTRY_GROUPS: ToolGroup[] = [
-	// Routers — one key, any upstream.
-	{ id: "route", label: "Route", hue: "#a78bfa", items: [svc("openrouter"), svc("vercel"), dedalus, svc("openai"), svc("anthropic")] },
+	// Model paths — one key, any upstream.
+	{ id: "route", label: "Switch", hue: "#a78bfa", items: [svc("openrouter"), svc("vercel"), dedalus, svc("openai"), svc("anthropic")] },
 	{ id: "automate", label: "Automate", hue: "#60a5fa", items: [svc("github"), svc("slack"), svc("linear"), svc("cloudflare")] },
 	{ id: "code", label: "Code", hue: "#22d3ee", items: [svc("typescript"), svc("nextdotjs"), svc("react"), svc("tailwindcss")] },
 	{ id: "data", label: "Data", hue: "#34d399", items: [svc("supabase"), svc("neon"), svc("upstash"), svc("turso"), svc("firebase"), svc("clickhouse")] },
@@ -281,21 +293,21 @@ type Feat = {
 };
 
 const AGENT_FEATURES: Feat[] = [
-	{ Icon: Network, label: "Any router", value: "200+ models", logos: ["openrouter", "anthropic", "openai"] },
-	{ Icon: Boxes, label: "Live registry", value: "1,400+ tools", logos: ["figma", "slack", "react"] },
+	{ Icon: Network, label: "Model paths", value: "BYOK upstreams", logos: ["openrouter", "anthropic", "openai"] },
+	{ Icon: Boxes, label: "Install catalog", value: "1,400+ entries", logos: ["figma", "slack", "react"] },
 	{ Icon: Terminal, label: "Browser terminal", value: "live PTY", logos: ["googlechrome", "playwright", "brave"] },
 	{ Icon: Plug, label: "Tools & MCPs", value: "auto-wired", logos: ["linear", "slack", "github"] },
 	{ Icon: Clock, label: "Crons", value: "scheduled", logos: ["cloudflare", "upstash", "datadog"] },
-	{ Icon: Rocket, label: "One-click deploy", value: "no setup", logos: ["vercel", "cloudflare", "firebase"] },
+	{ Icon: Rocket, label: "Guided deploy", value: "phase-tracked", logos: ["vercel", "cloudflare", "firebase"] },
 ];
 
 const SUBSTRATE_FEATURES: Feat[] = [
 	{ Icon: Brain, label: "Owned memory", value: "portable", logos: ["supabase", "neon", "upstash"] },
 	{ Icon: HardDrive, label: "Persistent state", value: "survives sleep", logos: ["e2b", "sprites", "vercel"] },
-	{ Icon: KeyRound, label: "One account", value: "one key", logos: ["clerk", "stripe", "supabase"] },
-	{ Icon: Zap, label: "Instant boot", value: "cold-start fast", logos: ["sprites", "e2b", "cloudflare"] },
-	{ Icon: History, label: "Snapshots", value: "resume anytime", logos: ["turso", "e2b", "vercel"] },
-	{ Icon: Globe, label: "Run anywhere", value: "any region", logos: ["cloudflare", "amazonwebservices", "vercel"] },
+	{ Icon: KeyRound, label: "Credential gate", value: "fail closed", logos: ["clerk", "stripe", "supabase"] },
+	{ Icon: Zap, label: "Benchmarked lanes", value: "boot · shell · IO", logos: ["sprites", "e2b", "cloudflare"] },
+	{ Icon: History, label: "Provider snapshots", value: "where supported", logos: ["turso", "e2b", "vercel"] },
+	{ Icon: Globe, label: "Four providers", value: "one interface", logos: ["cloudflare", "amazonwebservices", "vercel"] },
 ];
 
 function GroupIcon({ item, size = 14 }: { item: GroupItem; size?: number }) {
@@ -305,7 +317,7 @@ function GroupIcon({ item, size = 14 }: { item: GroupItem; size?: number }) {
 	return item.kind === "service" ? (
 		<ServiceIcon slug={item.slug} size={size} />
 	) : (
-		<Logo mark={item.mark} size={size} />
+		<Logo mark={item.mark} size={size} tone={publicLogoTone(item.mark)} />
 	);
 }
 
@@ -351,7 +363,7 @@ function FeatureLogoStack({ slugs }: { slugs: ServiceSlug[] }) {
 			className="pointer-events-none absolute inset-y-0 right-0 flex items-center overflow-hidden pr-2.5"
 		>
 			<span className="absolute inset-y-0 right-0 w-36 bg-[linear-gradient(to_left,var(--ret-surface),transparent)] opacity-70" />
-			<div className="relative flex items-center -space-x-2.5 opacity-80 transition-all duration-300 [mask-image:linear-gradient(to_right,transparent,#000_32%)] group-hover/feat:-space-x-1.5 group-hover/feat:opacity-100">
+			<div className="relative flex items-center -space-x-2.5 opacity-80 transition-opacity duration-[var(--ret-duration-hover)] [mask-image:linear-gradient(to_right,transparent,#000_32%)] [transition-timing-function:var(--ret-ease-out)] group-hover/feat:opacity-100">
 				{slugs.map((slug, i) => (
 					<span
 						key={slug}
@@ -408,7 +420,7 @@ function BrandTile({
 			onClick={onClick}
 			title={title}
 			className={cn(
-				"flex h-10 w-10 items-center justify-center rounded-lg border bg-[var(--ret-surface)] transition-all",
+				"ret-pressable flex h-10 w-10 items-center justify-center rounded-lg border bg-[var(--ret-surface)]",
 				onClick && "cursor-pointer hover:bg-[var(--ret-bg)]",
 			)}
 			style={{
@@ -432,26 +444,15 @@ function HeroSeam() {
 	);
 }
 
-/**
- * Fixed render size for the decorative circuit texture (source art is
- * 1024×682). Pinning the height — instead of `bg-cover` — holds the trace
- * zoom constant across cells of any height: short rail cells now show the
- * same zoomed-in crop as the tall heading-row cell, rather than a shrunk-down
- * (denser) version. ~468px matches the scale the tallest rail cell already
- * read at under `cover` (≈467px tall → ~0.69× of native).
- */
-const CIRCUIT_BG_SIZE = "auto 468px";
+const CIRCUIT_TEXTURE_SIZE = "384px 512px";
 
 /** Decorative circuit-board texture, theme-adaptive blend. */
 function CircuitGrid() {
 	return (
 		<div
 			aria-hidden="true"
-			className="pointer-events-none absolute inset-0 bg-center opacity-[0.1] mix-blend-multiply invert dark:opacity-[0.16] dark:mix-blend-screen dark:invert-0"
-			style={{
-				backgroundImage: "url(/brand/circuit-grid.png)",
-				backgroundSize: CIRCUIT_BG_SIZE,
-			}}
+			className="ret-circuit-texture pointer-events-none absolute inset-0 opacity-[0.14] mix-blend-multiply invert dark:opacity-[0.2] dark:mix-blend-screen dark:invert-0"
+			style={{ "--ret-circuit-size": CIRCUIT_TEXTURE_SIZE } as CSSProperties}
 		/>
 	);
 }
@@ -511,10 +512,10 @@ function HoverDiagram({
 			href={href}
 			{...(external ? { target: "_blank", rel: "noreferrer" } : {})}
 			aria-label={label}
-			className="group relative flex h-full items-center justify-center overflow-hidden rounded-lg border border-[var(--ret-border)] bg-[var(--ret-bg)] px-2 py-3 transition-colors hover:bg-[var(--ret-surface)]"
+			className="ret-pressable group relative flex h-full items-center justify-center overflow-hidden rounded-lg border border-[var(--ret-border)] bg-[var(--ret-bg)] px-2 py-3 hover:bg-[var(--ret-surface)]"
 		>
 			<CircuitArt slug={slug} variant="reveal" />
-			<span className="pointer-events-none relative z-10 font-mono text-[9px] uppercase tracking-[0.24em] text-[var(--ret-text-muted)] opacity-0 transition-all duration-300 group-hover:tracking-[0.3em] group-hover:text-[var(--ret-text)] group-hover:opacity-100">
+			<span className="pointer-events-none relative z-10 translate-y-1 font-mono text-[9px] uppercase tracking-[0.24em] text-[var(--ret-text-muted)] opacity-0 transition-[transform,opacity,color] duration-[var(--ret-duration-hover)] [transition-timing-function:var(--ret-ease-out)] group-hover:translate-y-0 group-hover:text-[var(--ret-text)] group-hover:opacity-100">
 				{label}
 			</span>
 		</a>
@@ -614,8 +615,8 @@ export function HeroBlock() {
 				</Cell>
 				<Cell className="hidden border-b border-r md:block">
 					<div className="flex h-full items-center justify-center gap-1.5">
-						<span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--ret-green)]" />
-						<ReticleBadge variant="success" className="!py-0 !text-[8px]">
+						<span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--ret-border-strong)]" />
+						<ReticleBadge variant="default" className="!py-0 !text-[8px]">
 							LIVE
 						</ReticleBadge>
 					</div>
@@ -628,18 +629,16 @@ export function HeroBlock() {
 					{/* The galaxy: same core + logos, on a continuously spinning tilted
 					    disc, dissolved into the cell from the right (gradient + hue glow). */}
 					<div className="pointer-events-none absolute inset-y-0 right-0 hidden overflow-hidden md:block md:w-[66%]">
-						{/* circuit-board texture, fading in from the right edge.
-						    Anchor the tile height + auto width so the 1024×682 art
-						    keeps its aspect ratio (no horizontal squish). */}
+						{/* vector circuit-board texture, fading in from the right edge. */}
 						<div
-							className="absolute inset-0 bg-[length:auto_300px] opacity-[0.14] mix-blend-multiply invert dark:opacity-[0.2] dark:mix-blend-screen dark:invert-0 [-webkit-mask-image:linear-gradient(to_right,transparent,black_60%)] [mask-image:linear-gradient(to_right,transparent,black_60%)]"
-							style={{ backgroundImage: "url(/brand/circuit-grid.png)" }}
+							className="ret-circuit-texture absolute inset-0 opacity-[0.18] mix-blend-multiply invert dark:opacity-[0.24] dark:mix-blend-screen dark:invert-0 [-webkit-mask-image:linear-gradient(to_right,transparent,black_60%)] [mask-image:linear-gradient(to_right,transparent,black_60%)]"
+							style={{ "--ret-circuit-size": "360px 512px" } as CSSProperties}
 						/>
 						{/* broad ambient hue wash, centered on the gear hub (≈72% across
 						    this container — where GEAR_OFFSET x=2.25 projects under the
 						    gears camera, not the cell center). */}
 						<div
-							className="absolute inset-0 transition-[background] duration-700"
+							className="absolute inset-0 transition-[background] duration-[var(--ret-duration-page)] [transition-timing-function:var(--ret-ease-out)]"
 							style={{
 								background: `radial-gradient(82% 95% at 72% 50%, ${hue}14, transparent 80%)`,
 							}}
@@ -647,7 +646,7 @@ export function HeroBlock() {
 						{/* tighter glow pinned on the hub so the bright core sits behind
 						    the meshing wheels. */}
 						<div
-							className="absolute inset-0 transition-[background] duration-700"
+							className="absolute inset-0 transition-[background] duration-[var(--ret-duration-page)] [transition-timing-function:var(--ret-ease-out)]"
 							style={{
 								background: `radial-gradient(48% 58% at 73% 50%, ${hue}30, transparent 74%)`,
 							}}
@@ -686,15 +685,15 @@ export function HeroBlock() {
 							</span>
 							<span className="-mx-6 flex items-center whitespace-nowrap md:-mx-9">
 								<span className="mr-3 h-px w-3 shrink-0 border-t border-dashed border-[var(--ret-border)] md:mr-2 md:w-7" />
-								<span className="text-[var(--ret-text-muted)]">on any substrate.</span>
+								<span className="text-[var(--ret-text-muted)]">on any Substrate.</span>
 								<span className="ml-3 h-px flex-1 border-t border-dashed border-[var(--ret-border)] md:ml-4" />
 							</span>
 						</h1>
-						<p className="max-w-[50ch] text-[15px] leading-relaxed text-[var(--ret-text-dim)]">
-							Route runtime and substrate in one account.{" "}
+						<p className="max-w-[76ch] text-[15px] leading-snug text-[var(--ret-text-dim)]">
+							Pick runtime, provider, and model from one account.{" "}
 							<strong className="font-medium text-[var(--ret-text)]">
-								Deploy persistent agent workers with tools and supervise your
-								fleet from one dashboard.
+								Provision persistent workers with loadout, state, console, logs,
+								usage, cron, and artifacts.
 							</strong>
 						</p>
 						<div className="flex flex-wrap items-center gap-2.5">
@@ -747,7 +746,7 @@ export function HeroBlock() {
 										hue={agentHue}
 										onClick={() => selectRailIndex(idx)}
 									>
-										<Logo mark={a.mark} size={20} />
+										<Logo mark={a.mark} size={20} tone={publicLogoTone(a.mark)} />
 									</BrandTile>
 								);
 							})}
@@ -807,7 +806,7 @@ export function HeroBlock() {
 								Use any tool
 							</span>
 							<span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--ret-text-muted)]">
-								200+ models · 1,400+ skills · MCPs · CLIs
+								model routers · registry catalog · MCPs · CLIs
 							</span>
 						</div>
 						<div className="flex flex-wrap items-start gap-x-5 gap-y-4">

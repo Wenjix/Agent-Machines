@@ -11,7 +11,10 @@
 
 import { isMachineRunningCached } from "@/lib/dashboard/machine-running-cache";
 import { SSE_HEADERS, sseFrame } from "@/lib/dashboard/sse";
-import { streamConsoleOutput } from "@/lib/dashboard/terminal-session";
+import {
+	isExpectedConsoleStreamEnd,
+	streamConsoleOutput,
+} from "@/lib/dashboard/terminal-session";
 import { getEffectiveUserId } from "@/lib/user-config/identity";
 
 export const runtime = "nodejs";
@@ -21,6 +24,8 @@ export const maxDuration = 120;
 const STREAM_BUDGET_MS = 110_000;
 
 export async function GET(request: Request): Promise<Response> {
+	const start = Date.now();
+	const requestId = request.headers.get("x-vercel-id");
 	const userId = await getEffectiveUserId();
 	if (!userId) return Response.json({ error: "unauthorized" }, { status: 401 });
 
@@ -67,6 +72,32 @@ export async function GET(request: Request): Promise<Response> {
 				write(sseFrame("idle", {}));
 			} catch (err) {
 				const message = err instanceof Error ? err.message : "stream failed";
+				if (isExpectedConsoleStreamEnd(err)) {
+					console.info(
+						JSON.stringify({
+							level: "info",
+							msg: "terminal_stream_reconnect",
+							route: "/api/dashboard/terminal/stream",
+							requestId,
+							machineId: machineId ?? null,
+							error: message,
+							ms: Date.now() - start,
+						}),
+					);
+					write(sseFrame("idle", { reason: "stream_timeout" }));
+					return;
+				}
+				console.error(
+					JSON.stringify({
+						level: "error",
+						msg: "terminal_stream_failed",
+						route: "/api/dashboard/terminal/stream",
+						requestId,
+						machineId: machineId ?? null,
+						error: message,
+						ms: Date.now() - start,
+					}),
+				);
 				write(sseFrame("error", { message }));
 			} finally {
 				closed = true;

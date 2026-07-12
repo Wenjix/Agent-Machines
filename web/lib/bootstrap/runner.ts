@@ -38,6 +38,7 @@ import {
 	POST_GATEWAY_BOOTSTRAP_PHASES,
 	type BootstrapPhaseId,
 	type BootstrapState,
+	type EnvironmentProfile,
 	type GatewayProfile,
 	type MachineRef,
 	type MemoryBundle,
@@ -342,23 +343,23 @@ async function runPhase(
 
 type UpstreamProvider = { key: string; baseUrl: string };
 
-const DEDALUS_BASE = "https://api.dedaluslabs.ai/v1";
-const DEDALUS_DCS_HOST = "dcs.dedaluslabs.ai";
 const ANTHROPIC_BASE = "https://api.anthropic.com/v1";
 const OPENAI_BASE = "https://api.openai.com/v1";
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
 const VERCEL_AI_GATEWAY_BASE = "https://ai-gateway.vercel.sh/v1";
 
 /**
- * Machine control plane (dcs.dedaluslabs.ai) ≠ LLM router (api.dedaluslabs.ai/v1).
- * Provider creds often store the DCS URL — normalize before writing Hermes config.
+ * A gateway profile's baseUrl is user-editable, so it must never be treated
+ * as a trusted provider host by itself. Any process.env platform credential
+ * must only be released when baseUrl's host really is the provider's own
+ * trusted host.
  */
-export function normalizeDedalusLlmBaseUrl(baseUrl: string | undefined): string {
-	if (!baseUrl || baseUrl.includes(DEDALUS_DCS_HOST)) {
-		return DEDALUS_BASE;
+function isTrustedHost(baseUrl: string, trustedUrl: string): boolean {
+	try {
+		return new URL(baseUrl).hostname === new URL(trustedUrl).hostname;
+	} catch {
+		return false;
 	}
-	const trimmed = baseUrl.trim().replace(/\/$/, "");
-	return trimmed.endsWith("/v1") ? trimmed : `${trimmed}/v1`;
 }
 
 /**
@@ -368,9 +369,8 @@ export function normalizeDedalusLlmBaseUrl(baseUrl: string | undefined): string 
  *   Anthropic Messages); no router can substitute, so we use the native key.
  * - hermes / openclaw are OpenAI-compatible gateways: they honor the
  *   machine's chosen gateway profile (gatewayProfileId), so users can route
- *   through Dedalus, Vercel AI Gateway, or any custom OpenAI-compatible
- *   endpoint instead of being locked to Dedalus. Falls back to the first
- *   configured key (Dedalus-first) for back-compat when no profile resolves.
+ *   through Vercel AI Gateway, OpenRouter, or any custom OpenAI-compatible
+ *   endpoint. Falls back in provider priority order when no profile resolves.
  */
 function resolveUpstream(machine: MachineRef, config: UserConfig): UpstreamProvider {
 	const agent = machine.agentKind;
@@ -409,20 +409,23 @@ function resolveRouterPreset(
 	if (!preset) return null;
 	const ai = config.aiProviderKeys ?? {};
 	switch (preset.source) {
-		case "dedalus":
-			return {
-				key: config.providers.dedalus?.apiKey ?? "",
-				baseUrl: normalizeDedalusLlmBaseUrl(config.providers.dedalus?.baseUrl),
-			};
 		case "vercelAiGateway":
 			return {
-				key: ai.vercelAiGateway ?? process.env.VERCEL_OIDC_TOKEN?.trim() ?? "",
+				key:
+					ai.vercelAiGateway ??
+					process.env.AI_GATEWAY_API_KEY?.trim() ??
+					process.env.VERCEL_OIDC_TOKEN?.trim() ??
+					process.env.AI_GATEWAY_KEY?.trim() ??
+					"",
 				baseUrl: preset.baseUrl ?? VERCEL_AI_GATEWAY_BASE,
 			};
 		case "openai":
 			return { key: ai.openai ?? "", baseUrl: preset.baseUrl ?? OPENAI_BASE };
 		case "openrouter":
-			return { key: ai.openrouter ?? "", baseUrl: preset.baseUrl ?? OPENROUTER_BASE };
+			return {
+				key: ai.openrouter ?? process.env.OPENROUTER_API_KEY?.trim() ?? "",
+				baseUrl: preset.baseUrl ?? OPENROUTER_BASE,
+			};
 		case "google":
 			return { key: ai.google ?? "", baseUrl: preset.baseUrl ?? OPENAI_BASE };
 		case "custom":
@@ -438,48 +441,71 @@ function gatewayProfileToUpstream(
 	config: UserConfig,
 ): UpstreamProvider {
 	const ai = config.aiProviderKeys ?? {};
-	if (profile.kind === "dedalus") {
-		return {
-			key: config.providers.dedalus?.apiKey ?? "",
-			baseUrl: normalizeDedalusLlmBaseUrl(config.providers.dedalus?.baseUrl),
-		};
-	}
+	// Every branch below withholds BOTH the user's own saved key and any
+	// platform env fallback unless baseUrl is verified against that
+	// provider's real host — only the final "custom" fallback is
+	// intentionally ungated, since it exists for the user's own arbitrary
+	// OpenAI-compatible endpoint.
 	if (profile.kind === "vercel-ai-gateway") {
+		const baseUrl = profile.baseUrl ?? VERCEL_AI_GATEWAY_BASE;
 		return {
 			key:
 				profile.apiKey ??
-				ai.vercelAiGateway ??
-				process.env.VERCEL_OIDC_TOKEN?.trim() ??
+				(isTrustedHost(baseUrl, VERCEL_AI_GATEWAY_BASE)
+					? (ai.vercelAiGateway ??
+						process.env.AI_GATEWAY_API_KEY?.trim() ??
+						process.env.VERCEL_OIDC_TOKEN?.trim() ??
+						process.env.AI_GATEWAY_KEY?.trim())
+					: undefined) ??
 				"",
-			baseUrl: profile.baseUrl ?? VERCEL_AI_GATEWAY_BASE,
+			baseUrl,
 		};
 	}
 	// openai-compatible: explicit profile key, else infer from the base URL.
 	const baseUrl = profile.baseUrl ?? OPENAI_BASE;
 	let key = profile.apiKey ?? "";
 	if (!key) {
-		if (baseUrl.includes("openrouter")) key = ai.openrouter ?? "";
-		else if (baseUrl.includes("openai.com")) key = ai.openai ?? "";
-		else if (baseUrl.includes("dedalus")) key = config.providers.dedalus?.apiKey ?? "";
-		else if (baseUrl.includes("ai-gateway.vercel")) key = ai.vercelAiGateway ?? "";
+		if (baseUrl.includes("openrouter")) {
+			key = isTrustedHost(baseUrl, OPENROUTER_BASE)
+				? (ai.openrouter ?? process.env.OPENROUTER_API_KEY?.trim() ?? "")
+				: "";
+		}
+		else if (baseUrl.includes("openai.com")) {
+			key = isTrustedHost(baseUrl, OPENAI_BASE) ? (ai.openai ?? process.env.OPENAI_API_KEY?.trim() ?? "") : "";
+		}
+		else if (baseUrl.includes("dedalus")) key = "";
+		else if (baseUrl.includes("ai-gateway.vercel")) {
+			key = isTrustedHost(baseUrl, VERCEL_AI_GATEWAY_BASE)
+				? (ai.vercelAiGateway ??
+					process.env.AI_GATEWAY_API_KEY?.trim() ??
+					process.env.VERCEL_OIDC_TOKEN?.trim() ??
+					process.env.AI_GATEWAY_KEY?.trim() ??
+					"")
+				: "";
+		}
 		else key = ai.custom?.key ?? "";
 	}
 	return { key, baseUrl };
 }
 
-/** Back-compat fallback: first configured upstream, Dedalus-first. */
+/** Fallback priority: Vercel AI Gateway, OpenRouter, then other configured providers. */
 function firstConfiguredUpstream(config: UserConfig): UpstreamProvider {
 	const ai = config.aiProviderKeys ?? {};
-	const dedalus = config.providers.dedalus?.apiKey;
-	if (dedalus) {
-		return { key: dedalus, baseUrl: normalizeDedalusLlmBaseUrl(config.providers.dedalus?.baseUrl) };
+	const vercelGateway =
+		ai.vercelAiGateway ??
+		process.env.AI_GATEWAY_API_KEY?.trim() ??
+		process.env.VERCEL_OIDC_TOKEN?.trim() ??
+		process.env.AI_GATEWAY_KEY?.trim();
+	if (vercelGateway) {
+		return { key: vercelGateway, baseUrl: VERCEL_AI_GATEWAY_BASE };
 	}
-	if (ai.vercelAiGateway) return { key: ai.vercelAiGateway, baseUrl: VERCEL_AI_GATEWAY_BASE };
-	if (ai.anthropic) return { key: ai.anthropic, baseUrl: ANTHROPIC_BASE };
+	const openrouter = ai.openrouter ?? process.env.OPENROUTER_API_KEY?.trim();
+	if (openrouter) return { key: openrouter, baseUrl: OPENROUTER_BASE };
 	if (ai.openai) return { key: ai.openai, baseUrl: OPENAI_BASE };
-	if (ai.openrouter) return { key: ai.openrouter, baseUrl: OPENROUTER_BASE };
+	if (ai.google) return { key: ai.google, baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai" };
 	if (ai.custom?.key) return { key: ai.custom.key, baseUrl: ai.custom.url };
-	return { key: "", baseUrl: DEDALUS_BASE };
+	if (ai.anthropic) return { key: ai.anthropic, baseUrl: ANTHROPIC_BASE };
+	return { key: "", baseUrl: VERCEL_AI_GATEWAY_BASE };
 }
 
 function commandFor(
@@ -597,7 +623,9 @@ function commandFor(
 			return [
 				"set -e",
 				`mkdir -p ${p.HERMES_HOME}/skills ${p.HERMES_HOME}/crons ${p.HERMES_HOME}/mcps ${p.APP_HOME}`,
-				`cat > ${p.APP_HOME}/settings.json <<'EOF'\n${machineSettingsJson(machine, config)}\nEOF`,
+				writeRemoteFile(`${p.APP_HOME}/settings.json`, machineSettingsJson(machine, config)),
+				writeRemoteFile(`${p.APP_HOME}/.agent-env`, machineAgentEnvFile(machine, config)),
+				`chmod 600 ${p.APP_HOME}/.agent-env`,
 			].join(" && ");
 		case "install-git-reload": {
 			const reloadBody = buildWebReloadScript(p.HOME, p.APP_HOME);
@@ -634,10 +662,28 @@ function commandFor(
 			const gwPort = isSprites ? 8080 : HERMES_PORT;
 			if (agent === "openclaw") {
 				const ocPort = isSprites ? 8080 : OPENCLAW_PORT;
-				return configureOpenClaw(model, gatewayKey, upstreamApiKey, upstreamBaseUrl, p, ocPort, upstream.baseUrl);
+				return configureOpenClaw(
+					model,
+					gatewayKey,
+					upstreamApiKey,
+					upstreamBaseUrl,
+					p,
+					machine,
+					config,
+					ocPort,
+					upstream.baseUrl,
+				);
 			}
 			if (agent === "claude-code" || agent === "codex") {
-				return configureCliAgent(agent, upstream.key, upstream.baseUrl, p, isSandbox);
+				return configureCliAgent(
+					agent,
+					upstream.key,
+					upstream.baseUrl,
+					p,
+					isSandbox,
+					machine,
+					config,
+				);
 			}
 			return configureHermes(model, gatewayKey, upstreamApiKey, upstreamBaseUrl, p, gwPort, upstream.baseUrl);
 		}
@@ -743,11 +789,14 @@ async function startGatewaySandbox(
 	if (machine.agentKind === "claude-code" || machine.agentKind === "codex") return;
 
 	const gw = gatewayConfigFor(machine, paths);
+	const isSprites = machine.providerKind === "sprites";
+	const probeTimeoutMs = isSprites ? 25_000 : 5_000;
+	const cleanupTimeoutMs = isSprites ? 25_000 : 10_000;
 
 	const alreadyUp = await provider.exec(
 		machine.id,
 		`ss -ltn 2>/dev/null | grep -q ":${gw.port} " && echo ready || echo waiting`,
-		{ timeoutMs: 15_000 },
+		{ timeoutMs: isSprites ? 25_000 : 15_000 },
 	);
 	if (alreadyUp.stdout.trim() === "ready") return;
 
@@ -758,7 +807,7 @@ async function startGatewaySandbox(
 		`ps -eo pid,cmd 2>/dev/null | awk '/${gw.killPattern}/ && !/awk/ {print \\$1}' | xargs -r kill 2>/dev/null || true`,
 		"sleep 1",
 		`mkdir -p ${paths.MACHINE_HOME}/logs/services`,
-	].join(" && "), { timeoutMs: 10_000 });
+	].join(" && "), { timeoutMs: cleanupTimeoutMs });
 
 	// 2. Start gateway in background — use the SDK's native background mode
 	// when available (E2B), fall back to & disown (Sprites)
@@ -778,19 +827,19 @@ async function startGatewaySandbox(
 	}
 
 	// 3. Poll for readiness instead of blind sleep
-	const MAX_POLLS = 45;
+	const MAX_POLLS = isSprites ? 12 : 45;
 	for (let i = 0; i < MAX_POLLS; i++) {
 		const probe = await provider.exec(machine.id,
 			`ss -ltn 2>/dev/null | grep -q ":${gw.port}" && echo ready || echo waiting`,
-			{ timeoutMs: 5_000 },
+			{ timeoutMs: probeTimeoutMs },
 		);
 		if (probe.stdout.trim() === "ready") return;
-		await new Promise(resolve => setTimeout(resolve, 1_000));
+		await new Promise(resolve => setTimeout(resolve, isSprites ? 2_000 : 1_000));
 	}
 
 	const log = await provider.exec(machine.id,
 		`tail -20 ${gw.logFile} 2>/dev/null || echo "no log"`,
-		{ timeoutMs: 5_000 },
+		{ timeoutMs: probeTimeoutMs },
 	);
 	throw new Error(
 		`Gateway did not start on :${gw.port} after ${MAX_POLLS}s. Log:\n${log.stdout.slice(-300)}`,
@@ -800,7 +849,7 @@ async function startGatewaySandbox(
 /**
  * Map an upstream base URL to a hermes-agent provider id. Built-in providers
  * (openrouter/openai/anthropic) are registered as pooled credentials via
- * `hermes auth add`; everything else (Dedalus, Vercel AI Gateway, custom) is a
+ * `hermes auth add`; everything else (Vercel AI Gateway, custom) is a
  * `custom` OpenAI-compatible endpoint configured with base_url + api_key.
  */
 function hermesProviderId(rawBaseUrl: string): { id: string; builtin: boolean } {
@@ -841,6 +890,8 @@ function configureHermes(
 	cmds.push(
 		`hermes config set model.model ${model}`,
 		`hermes config set first_run_complete true`,
+		`hermes config set display.streaming true`,
+		`hermes config set display.tool_progress all`,
 		`cat > ${p.HERMES_HOME}/.env <<EOF\nAPI_SERVER_ENABLED=true\nAPI_SERVER_KEY=${gatewayKey}\nAPI_SERVER_HOST=0.0.0.0\nAPI_SERVER_PORT=${port}\nGATEWAY_ALLOW_ALL_USERS=true\nEOF`,
 	);
 	return cmds.join(" && ");
@@ -849,7 +900,7 @@ function configureHermes(
 /**
  * Map an upstream base URL to an openclaw provider. openclaw bundles
  * openrouter/openai/anthropic (auth via a pasted API key); any other
- * OpenAI-compatible router (Dedalus / Vercel AI Gateway / custom) is registered
+ * OpenAI-compatible router (Vercel AI Gateway / custom) is registered
  * as a `models.providers` custom provider with api=openai-completions.
  */
 function openclawProviderFor(rawBaseUrl: string): { id: string; builtin: boolean } {
@@ -866,6 +917,8 @@ function configureOpenClaw(
 	upstreamApiKey: string,
 	upstreamBaseUrl: string,
 	p: BootstrapPaths,
+	machine: MachineRef,
+	config: UserConfig,
 	gatewayPort = OPENCLAW_PORT,
 	rawBaseUrl = "",
 ): string {
@@ -914,7 +967,10 @@ function configureOpenClaw(
 		`openclaw models set ${modelRef}`,
 		writeRemoteFile(
 			`${p.OPENCLAW_HOME}/.env`,
-			`OPENCLAW_API_KEY=${stripShell(gatewayKey)}\nOPENCLAW_MODEL=${modelRef}\n`,
+			machineDotEnvFile(machine, config, [
+				["OPENCLAW_API_KEY", stripShell(gatewayKey)],
+				["OPENCLAW_MODEL", modelRef],
+			]),
 		),
 	].join(" && ");
 }
@@ -925,6 +981,8 @@ function configureCliAgent(
 	upstreamBaseUrl: string,
 	p: BootstrapPaths,
 	isSandbox: boolean,
+	machine: MachineRef,
+	config: UserConfig,
 ): string {
 	const isClaude = agent === "claude-code";
 	const configDir = isClaude ? `${p.HOME}/.claude` : `${p.HOME}/.codex`;
@@ -946,7 +1004,10 @@ function configureCliAgent(
 		const host = upstreamBaseUrl.replace(/\/v1\/?$/, "");
 		envLines.push(`export ANTHROPIC_BASE_URL=${host}`);
 	}
-	const envWrite = writeRemoteFile(`${p.APP_HOME}/.agent-env`, `${envLines.join("\n")}\n`);
+	const envWrite = writeRemoteFile(
+		`${p.APP_HOME}/.agent-env`,
+		machineAgentEnvFile(machine, config, envLines),
+	);
 
 	if (isClaude) {
 		const aptWait = isSandbox ? "" : `${WAIT_FOR_APT} && `;
@@ -987,6 +1048,79 @@ function machineMemory(config: UserConfig, machine: MachineRef): MemoryBundle {
 	return resolveBundle(config, worker.memoryBundleId) ?? defaultMemoryBundle();
 }
 
+const ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+function machineEnvironmentProfile(
+	config: UserConfig,
+	machine: MachineRef,
+): EnvironmentProfile | null {
+	if (!machine.environmentProfileId) return null;
+	return (
+		config.environmentProfiles.find(
+			(profile) => profile.id === machine.environmentProfileId,
+		) ?? null
+	);
+}
+
+function validEnvVars(profile: EnvironmentProfile | null): Record<string, string> {
+	if (!profile) return {};
+	return Object.fromEntries(
+		Object.entries(profile.vars).filter(([key]) => ENV_KEY_RE.test(key)),
+	);
+}
+
+function shellEnvLine(key: string, value: string): string {
+	return `export ${key}=${shell(value)}`;
+}
+
+function dotenvLine(key: string, value: string): string {
+	return `${key}=${JSON.stringify(value)}`;
+}
+
+function machineAgentEnvFile(
+	machine: MachineRef,
+	config: UserConfig,
+	extraLines: string[] = [],
+): string {
+	const profile = machineEnvironmentProfile(config, machine);
+	const vars = validEnvVars(profile);
+	const lines = [
+		"# Generated by Agent Machines. Safe to source from shell scripts.",
+		`export AM_MACHINE_ID=${shell(machine.id)}`,
+		...(profile
+			? [
+					`export AM_ENV_PROFILE_ID=${shell(profile.id)}`,
+					`export AM_ENV_PROFILE_NAME=${shell(profile.name)}`,
+				]
+			: []),
+		...Object.entries(vars).map(([key, value]) => shellEnvLine(key, value)),
+		...extraLines,
+	];
+	return `${lines.join("\n")}\n`;
+}
+
+function machineDotEnvFile(
+	machine: MachineRef,
+	config: UserConfig,
+	extraVars: Array<[string, string]> = [],
+): string {
+	const profile = machineEnvironmentProfile(config, machine);
+	const vars = validEnvVars(profile);
+	const lines = [
+		"# Generated by Agent Machines.",
+		`AM_MACHINE_ID=${JSON.stringify(machine.id)}`,
+		...(profile
+			? [
+					`AM_ENV_PROFILE_ID=${JSON.stringify(profile.id)}`,
+					`AM_ENV_PROFILE_NAME=${JSON.stringify(profile.name)}`,
+				]
+			: []),
+		...Object.entries(vars).map(([key, value]) => dotenvLine(key, value)),
+		...extraVars.map(([key, value]) => dotenvLine(key, value)),
+	];
+	return `${lines.join("\n")}\n`;
+}
+
 /**
  * The on-VM settings.json. Driven by the machine's deployed Worker -> its
  * Memory -> the resolved abilities over the imported pool. Replaces the old
@@ -996,11 +1130,19 @@ function machineSettingsJson(machine: MachineRef, config: UserConfig): string {
 	const worker = resolveMachineWorker(config, machine);
 	const memory = resolveBundle(config, worker.memoryBundleId) ?? defaultMemoryBundle();
 	const abilities = resolveAbilities(memory, buildPool(config));
+	const environment = machineEnvironmentProfile(config, machine);
 	const settings = {
 		version: 2,
 		machineId: machine.id,
 		agentKind: machine.agentKind,
 		model: machine.model,
+		environment: environment
+			? {
+					id: environment.id,
+					name: environment.name,
+					vars: validEnvVars(environment),
+				}
+			: null,
 		worker: {
 			id: worker.id,
 			name: worker.name,
@@ -1151,6 +1293,7 @@ function hermesEnv(p: BootstrapPaths): string {
 	return [
 		`export HOME=${p.HOME}`,
 		`export HERMES_HOME=${p.HERMES_HOME}`,
+		`[ -f ${p.APP_HOME}/.agent-env ] && . ${p.APP_HOME}/.agent-env || true`,
 		`export NPM_CONFIG_PREFIX=${p.NPM_PREFIX}`,
 		`export NPM_CONFIG_CACHE=${p.NPM_CACHE}`,
 		`export PLAYWRIGHT_BROWSERS_PATH=${p.PLAYWRIGHT_BROWSERS}`,
@@ -1162,6 +1305,7 @@ function hermesEnv(p: BootstrapPaths): string {
 function openClawEnv(p: BootstrapPaths): string {
 	return [
 		`export HOME=${p.HOME}`,
+		`[ -f ${p.APP_HOME}/.agent-env ] && . ${p.APP_HOME}/.agent-env || true`,
 		// Do not set NPM_CONFIG_PREFIX — Sprites nvm rejects it and breaks openclaw CLI.
 		`export NPM_CONFIG_CACHE=${p.NPM_CACHE}`,
 		`export FNM_DIR=${p.HOME}/.local/share/fnm`,

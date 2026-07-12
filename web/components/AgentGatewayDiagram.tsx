@@ -27,7 +27,7 @@ const BENTOS: ReadonlyArray<BentoItem> = [
 	{
 		kicker: "02 / gateway",
 		title: "One port, both agents",
-		body: "Hermes and OpenClaw share :8642. The Dedalus AI router fronts 200+ models. Swap the agent from the navbar, not the endpoint.",
+		body: "Hermes and OpenClaw share :8642. Vercel AI Gateway is first, OpenRouter is fallback, and the endpoint stays stable.",
 		span: "normal",
 		variant: "nyx-lines",
 		diagram: "gateway",
@@ -142,8 +142,8 @@ function AgentFlowDiagram() {
 				<IconGateway className="h-5 w-5" />
 			</FlowBox>
 			<FlowArrow />
-			<FlowBox label="Agent" sub="Hermes / OC" accent="var(--ret-green)">
-				<Logo mark="agent" size={18} />
+			<FlowBox label="Agent" sub="Hermes / OC" accent="var(--ret-text)">
+				<Logo mark="agent" size={18} tone="native" />
 			</FlowBox>
 			<FlowArrow />
 			<FlowBox label="Container" sub="/home/machine" accent="var(--ret-amber)">
@@ -163,8 +163,8 @@ function GatewayDiagram() {
 				<MiniCell label="Tunnel" value="Cloudflare / preview URL" />
 			</div>
 			<div className="flex items-center gap-2">
-				<Logo mark="nous" size={14} />
-				<Logo mark="openclaw" size={14} />
+				<Logo mark="nous" size={14} tone="native" />
+				<Logo mark="openclaw" size={14} tone="native" />
 				<ServiceIcon slug="cloudflare" size={14} />
 				<Logo mark="am" size={14} />
 			</div>

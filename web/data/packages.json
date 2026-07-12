@@ -1,6 +1,6 @@
 {
   "description": "Session attach packages for Add ___ composer chips — one per Cursor Marketplace plugin.",
-  "syncedAt": "2026-07-03T11:59:56.246Z",
+  "syncedAt": "2026-07-09T07:08:16.879Z",
   "packages": [
     {
       "id": "1inch",
@@ -365,6 +365,42 @@
         "skill-apify-sdk-integration",
         "skill-apify-ultimate-scraper",
         "mcp-apify"
+      ]
+    },
+    {
+      "id": "apollo",
+      "name": "Apollo.io",
+      "description": "Prospect, enrich leads, load outreach sequences, and query sales analytics with Apollo.io — one-click MCP server integration.",
+      "brand": null,
+      "homepage": "https://apollo.io",
+      "docsUrl": "https://github.com/apolloio/apollo-mcp-plugin",
+      "marketplaceUrl": "https://cursor.com/marketplace/apollo",
+      "logoUrl": "https://ptht05hbb1ssoooe.public.blob.vercel-storage.com/assets/uploads/apollo-logo-2.png",
+      "triggers": [
+        "apollo",
+        "apollo.io",
+        "apollo-io",
+        "analytics",
+        "enrich-lead",
+        "prospect",
+        "sequence-load"
+      ],
+      "skillIds": [
+        "analytics",
+        "enrich-lead",
+        "prospect",
+        "sequence-load"
+      ],
+      "mcpServerIds": [
+        "apollo"
+      ],
+      "registryItemIds": [
+        "plugin-apollo",
+        "skill-analytics",
+        "skill-enrich-lead",
+        "skill-prospect",
+        "skill-sequence-load",
+        "mcp-apollo"
       ]
     },
     {
@@ -1338,25 +1374,34 @@
     {
       "id": "box",
       "name": "Box",
-      "description": "Cursor plugin for Box — search, read, and manage content in Box, and leverage Box AI for Q&A, summarization, and extraction via the Box MCP server.",
+      "description": "Box Plugin for Cursor — search, read, and manage content in Box, build Box Platform integrations, and leverage Box AI for Q&A, summarization, and extraction via the Box MCP server.",
       "brand": null,
       "homepage": "https://box.com",
-      "docsUrl": "https://github.com/box-community/cursor-box-plugin",
+      "docsUrl": "https://github.com/box/box-for-ai",
       "marketplaceUrl": "https://cursor.com/marketplace/box",
-      "logoUrl": "https://cursor-cdn.com/plugin-logos/production/e2a715739c3f4444.png",
+      "logoUrl": "https://cursor-cdn.com/plugin-logos/production/bb3c80081bf5db9d.png",
       "triggers": [
-        "box"
+        "box",
+        "box-legal-workflows",
+        "box-legal-workflows-contract",
+        "box-legal-workflows-intake",
+        "box-legal-workflows-ma"
       ],
       "skillIds": [
-        "box"
+        "box",
+        "box-legal-workflows",
+        "box-legal-workflows-contract",
+        "box-legal-workflows-intake",
+        "box-legal-workflows-ma"
       ],
-      "mcpServerIds": [
-        "box"
-      ],
+      "mcpServerIds": [],
       "registryItemIds": [
         "plugin-box",
         "skill-box",
-        "mcp-box"
+        "skill-box-legal-workflows",
+        "skill-box-legal-workflows-contract",
+        "skill-box-legal-workflows-intake",
+        "skill-box-legal-workflows-ma"
       ]
     },
     {
@@ -3179,6 +3224,35 @@
       ]
     },
     {
+      "id": "forge",
+      "name": "Forge",
+      "description": "Forge — Work order management, developer activity tracking, and project context for AI-assisted development workflows.",
+      "brand": null,
+      "homepage": "https://opsera.ai/",
+      "docsUrl": "https://github.com/securefactory/forge-cursor-plugin",
+      "marketplaceUrl": "https://cursor.com/marketplace/forge",
+      "logoUrl": "https://cursor-cdn.com/plugin-logos/production/09121ad7231a669b.png",
+      "triggers": [
+        "forge",
+        "opsera",
+        "dev-activity",
+        "project-context",
+        "work-orders"
+      ],
+      "skillIds": [
+        "dev-activity",
+        "project-context",
+        "work-orders"
+      ],
+      "mcpServerIds": [],
+      "registryItemIds": [
+        "plugin-forge",
+        "skill-dev-activity",
+        "skill-project-context",
+        "skill-work-orders"
+      ]
+    },
+    {
       "id": "gitlab",
       "name": "GitLab",
       "description": "Connect Cursor to GitLab with the GitLab MCP server. Plan, track, and manage issues, merge requests, and pipelines from your editor.",
@@ -4094,6 +4168,41 @@
         "skill-iterate-with-lovable-agent",
         "skill-scaffold-lovable-project",
         "mcp-lovable"
+      ]
+    },
+    {
+      "id": "magic-patterns",
+      "name": "Magic Patterns",
+      "description": "Use Magic Patterns (magicpatterns.com) from your coding agent: prototype ideas, generate UI inspiration, upload local UI, and integrate Magic Patterns designs into your codebase.",
+      "brand": null,
+      "homepage": "https://www.magicpatterns.com/",
+      "docsUrl": "https://github.com/magicpatterns/agent-plugins",
+      "marketplaceUrl": "https://cursor.com/marketplace/magic-patterns",
+      "logoUrl": "https://ptht05hbb1ssoooe.public.blob.vercel-storage.com/assets/uploads/magic-patterns.png",
+      "triggers": [
+        "magic-patterns",
+        "magic patterns",
+        "inspiration",
+        "integrate-magic-patterns-design",
+        "prototype",
+        "upload-to-magic-patterns"
+      ],
+      "skillIds": [
+        "inspiration",
+        "integrate-magic-patterns-design",
+        "prototype",
+        "upload-to-magic-patterns"
+      ],
+      "mcpServerIds": [
+        "magic-patterns"
+      ],
+      "registryItemIds": [
+        "plugin-magic-patterns",
+        "skill-inspiration",
+        "skill-integrate-magic-patterns-design",
+        "skill-prototype",
+        "skill-upload-to-magic-patterns",
+        "mcp-magic-patterns"
       ]
     },
     {
@@ -7207,14 +7316,17 @@
       "logoUrl": "https://cursor-cdn.com/plugin-logos/production/9b15dbfa42ef7eff.png",
       "triggers": [
         "temporal",
+        "temporal-cloud-setup",
         "temporal-developer"
       ],
       "skillIds": [
+        "temporal-cloud-setup",
         "temporal-developer"
       ],
       "mcpServerIds": [],
       "registryItemIds": [
         "plugin-temporal",
+        "skill-temporal-cloud-setup",
         "skill-temporal-developer"
       ]
     },

@@ -1,6 +1,7 @@
-import type { SVGProps } from "react";
+import type { CSSProperties, SVGProps } from "react";
 
 import { Logo, type Mark } from "@/components/Logo";
+import { CircuitArt } from "@/components/reticle/CircuitArt";
 import { ReticleLabel } from "@/components/reticle/ReticleLabel";
 import { ServiceIcon, type ServiceSlug } from "@/components/ServiceIcon";
 import { WorkflowTabs } from "@/components/WorkflowTabs";
@@ -17,14 +18,23 @@ type PoweredByEntry =
 	| { kind: "logo"; name: string; mark: Mark }
 	| { kind: "service"; name: string; slug: ServiceSlug };
 
+type Metric = readonly [label: string, value: string, hint?: string];
+
+type CircuitStyle = CSSProperties & {
+	"--ret-circuit-size": string;
+};
+
 type Step = {
 	id: string;
 	tab: string;
+	stage: string;
 	kicker: string;
 	title: string;
 	body: string;
 	Icon: (props: SVGProps<SVGSVGElement>) => React.ReactElement;
+	art: string;
 	bullets: readonly Bullet[];
+	metrics: readonly Metric[];
 	poweredBy: readonly PoweredByEntry[];
 };
 
@@ -32,14 +42,21 @@ const STEPS: ReadonlyArray<Step> = [
 	{
 		id: "ui",
 		tab: "dashboard",
+		stage: "01",
 		kicker: "AGENT MACHINES · CONTROL PLANE",
 		title: "Configure once, supervise the whole fleet.",
-		body: "Settings, setup, worker lifecycle, terminal, logs, artifacts, and chat all read from the same account objects — not one-off wizard state.",
+		body: "Setup, lifecycle, terminal, logs, artifacts, usage, and chat all read from the same account objects. The dashboard shows what is configured, running, and saved.",
 		Icon: IconPanel,
+		art: "overview",
 		bullets: [
-			["Route ", "runtime + substrate", " from one account settings model"],
+			["Pair ", "runtime + substrate", " from one account settings model"],
 			["Worker lifecycle: ", "wake · sleep · destroy", " (per substrate capability)"],
 			["Persistent state in ", "/home/machine/.agent-machines"],
+		],
+		metrics: [
+			["recipe", "runtime + substrate", "account object"],
+			["state", "disk-backed", "/home/machine"],
+			["actions", "wake · sleep · destroy", "capability gated"],
 		],
 		poweredBy: [
 			{ kind: "service", name: "Clerk", slug: "clerk" },
@@ -49,14 +66,21 @@ const STEPS: ReadonlyArray<Step> = [
 	{
 		id: "agent",
 		tab: "agent",
-		kicker: "AGENT MACHINES · RUNTIME ROUTES",
+		stage: "02",
+		kicker: "AGENT MACHINES · RUNTIME LANES",
 		title: "Four runtimes, two operation models, one worker.",
-		body: "Autonomous agents wake on schedule with built-in drivers. Task-driven CLIs run per job but automate via headless flags and cron — same gateway and disk boundary.",
+		body: "Hermes and OpenClaw run as longer-lived agent drivers. Claude Code and Codex run as task CLIs. Each lands inside the same machine record and persistent runtime root.",
 		Icon: IconAgent,
+		art: "agents",
 		bullets: [
-			["Autonomous routes: ", "Hermes · OpenClaw"],
-			["Task-driven routes: ", "Claude Code · Codex"],
+			["Always-on agents: ", "Hermes · OpenClaw"],
+			["Task CLIs: ", "Claude Code · Codex"],
 			["Reusable per-account ", "agent profiles"],
+		],
+		metrics: [
+			["autonomous", "Hermes · OpenClaw", "gateway workers"],
+			["task cli", "Claude Code · Codex", "headless commands"],
+			["profile", "per account", "saved default"],
 		],
 		poweredBy: [
 			{ kind: "logo", name: "Nous", mark: "nous" },
@@ -66,44 +90,65 @@ const STEPS: ReadonlyArray<Step> = [
 	{
 		id: "tools",
 		tab: "tools + mcps",
+		stage: "03",
 		kicker: "AGENT MACHINES · LOADOUT",
 		title: "Skills, MCP servers, CLIs, and plugins — one harness.",
-		body: "Built-ins and custom loadout entries live in the same account settings model so terminal edits sync back into the dashboard.",
+		body: "Loadout is the active stack on a machine: skills, MCPs, service lanes, CLIs, plugins, and source entries. Registry is where new entries get added.",
 		Icon: IconTools,
+		art: "loadout",
 		bullets: [
 			["", `${HARNESS.skillCount} skills`, " in SKILL.md protocol"],
-			["", `${HARNESS.serviceRouteCount} service routes`, " · MCP → CLI → skills"],
+			["", `${HARNESS.serviceRouteCount} service lanes`, " · MCP → CLI → skills"],
 			["", `${HARNESS.cliCount}+ CLIs`, " · closed-loop verification"],
 			["Custom loadout: ", "skill · tool · mcp · cli · plugin"],
+		],
+		metrics: [
+			["skills", `${HARNESS.skillCount}`, "SKILL.md"],
+			["services", `${HARNESS.serviceRouteCount}`, "ranked lanes"],
+			["tools", `${HARNESS.rigToolSurfaceCount}`, "callable"],
 		],
 		poweredBy: [{ kind: "logo", name: "Agent Machines", mark: "am" }],
 	},
 	{
 		id: "providers",
 		tab: "providers",
-		kicker: "AGENT MACHINES · SUBSTRATE ROUTES",
+		stage: "04",
+		kicker: "AGENT MACHINES · SUBSTRATE LANES",
 		title: "Four substrate lanes — E2B, Sprites, Dedalus, and Vercel.",
-		body: "OpenRouter-style substrate routing — same bootstrap, gateway, and dashboard surfaces. Pick the host shape; lifecycle actions follow what each lane supports.",
+		body: "Each lane implements the same MachineProvider shape. The UI shows only the lifecycle actions and streaming behavior that provider supports.",
 		Icon: IconProvider,
+		art: "machines",
 		bullets: [
 			["", "E2B", " — sandbox with pause/resume"],
 			["", "Sprites", " — persistent microVM on Sprites.dev"],
 			["", "Dedalus Machines", " — strong default on boot and sleep/wake"],
 			["", "Vercel Sandbox", " — persistent microVMs with auto-snapshots"],
 		],
+		metrics: [
+			["lanes", "4", "one interface"],
+			["capability", "provider-scoped", "no fake buttons"],
+			["stream", "terminal + logs", "when supported"],
+		],
 		poweredBy: [{ kind: "service", name: "Vercel", slug: "vercel" }],
 	},
 	{
 		id: "env",
 		tab: "environment",
+		stage: "05",
 		kicker: "AGENT MACHINES · ENVIRONMENT",
 		title: "Gateway and env profiles follow every new worker.",
 		body: "Gateway modes, named variable sets, and bootstrap presets are account-level objects a new worker inherits on deploy.",
 		Icon: IconEnv,
+		art: "settings",
 		bullets: [
 			["Gateway modes: ", "tunnel · ai gateway · byo"],
 			["Named variable sets with ", "env profiles"],
 			["Phase-tracked ", "bootstrap", " presets"],
+		],
+		metrics: [
+			["gateway", "ai gateway", "default path"],
+			["env", "profiles", "named sets"],
+			["bootstrap", "phased", "visible steps"],
 		],
 		poweredBy: [
 			{ kind: "service", name: "Vercel", slug: "vercel" },
@@ -118,20 +163,6 @@ const TAB_DATA = STEPS.map((s) => ({
 	icon: <s.Icon className="h-3.5 w-3.5" />,
 }));
 
-/**
- * Per-step circuit-art schematic. White-on-black line art shown as the
- * hero visual of each step's right column (foreground, not a tint), with
- * the live terminal docked below it. Replaces the old off-brand colored
- * gradients now that the system is grayscale.
- */
-const STEP_ART: ReadonlyArray<string> = [
-	"overview", // dashboard / control plane
-	"agents", // runtime routes
-	"loadout", // tools + mcps
-	"machines", // substrate routes
-	"settings", // environment
-];
-
 /* ------------------------------------------------------------------ */
 /* Main                                                                */
 /* ------------------------------------------------------------------ */
@@ -139,16 +170,28 @@ const STEP_ART: ReadonlyArray<string> = [
 export function WorkflowNavigator() {
 	return (
 		<section className="relative">
-			<div className="px-4 py-10 text-center md:px-5 md:py-14">
-				<ReticleLabel className="mx-auto">WORKFLOW</ReticleLabel>
-				<h2 className="ret-display mx-auto mt-4 max-w-[24ch] text-2xl md:text-4xl">
-					Route runtime, substrate, and loadout in one surface
-				</h2>
-				<p className="mx-auto mt-4 max-w-[54ch] text-[13px] leading-relaxed text-[var(--ret-text-dim)]">
-					The control plane unifies dashboard, agent runtimes, tools, substrate
-					lanes, and environment into one account — OpenRouter for agents and
-					containers.
-				</p>
+			<div className="grid gap-px border-b border-[var(--ret-border)] bg-[var(--ret-border)] lg:grid-cols-[minmax(360px,0.36fr)_minmax(0,0.64fr)] xl:grid-cols-[420px_minmax(0,1fr)]">
+				<div className="relative overflow-hidden bg-[var(--ret-bg)] px-4 py-8 md:px-6 md:py-12 lg:px-8">
+					<CircuitArt
+						slug="workflow"
+						variant="ambient"
+						className="opacity-[0.12] dark:opacity-[0.18]"
+					/>
+					<ReticleLabel>WORKFLOW</ReticleLabel>
+					<h2 className="ret-display relative z-10 mt-4 max-w-[14ch] text-3xl md:text-5xl lg:text-[54px] lg:leading-[0.95]">
+						One worker, one recipe.
+					</h2>
+					<p className="relative z-10 mt-5 max-w-[52ch] text-[14px] leading-relaxed text-[var(--ret-text-dim)]">
+						Account settings compile into a runnable worker: runtime,
+						substrate, model path, environment, loadout, and observable state.
+					</p>
+				</div>
+				<div className="grid grid-cols-2 gap-px bg-[var(--ret-border)] sm:grid-cols-4">
+					<WorkflowPillar label="runtime" value="agent driver" />
+					<WorkflowPillar label="substrate" value="machine lane" />
+					<WorkflowPillar label="loadout" value="tools + MCP" />
+					<WorkflowPillar label="observe" value="logs + usage" />
+				</div>
 			</div>
 
 			<WorkflowTabs steps={TAB_DATA} />
@@ -174,31 +217,41 @@ function WorkflowRow({ step, index }: { step: Step; index: number }) {
 	return (
 		<div
 			id={`workflow-${step.id}`}
-			className="grid min-h-[480px] scroll-mt-[84px] grid-cols-1 md:grid-cols-2"
+			className="grid min-h-[760px] scroll-mt-[92px] grid-cols-1 lg:min-h-[calc(100dvh-64px)] lg:grid-cols-[360px_minmax(0,1fr)] xl:grid-cols-[400px_minmax(0,1fr)]"
 		>
 			{/* Text panel */}
-			<div className="flex flex-col justify-between p-5 md:p-8 lg:p-10">
+			<div className="relative flex flex-col justify-between overflow-hidden bg-[var(--ret-bg)] p-5 md:p-7 lg:p-8">
+				<CircuitArt
+					slug={step.art}
+					variant="ambient"
+					className="opacity-[0.16] dark:opacity-[0.24]"
+				/>
 				<div>
-					<ReticleLabel>{step.kicker}</ReticleLabel>
-					<h3 className="mt-4 max-w-[18ch] text-xl font-semibold tracking-tight text-[var(--ret-text)] md:text-2xl">
+					<div className="flex items-center justify-between gap-4">
+						<ReticleLabel>{step.kicker}</ReticleLabel>
+						<span className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--ret-text-muted)]">
+							stage {step.stage}
+						</span>
+					</div>
+					<h3 className="mt-5 max-w-[16ch] text-2xl font-semibold tracking-tight text-[var(--ret-text)] md:text-3xl lg:text-[34px] lg:leading-tight">
 						{step.title}
 					</h3>
-					<p className="mt-3 max-w-[48ch] text-[13px] leading-relaxed text-[var(--ret-text-dim)]">
+					<p className="mt-4 max-w-[45ch] text-[13px] leading-relaxed text-[var(--ret-text-dim)]">
 						{step.body}
 					</p>
 
-					<ul className="mt-6 space-y-3">
+					<ul className="mt-7 grid gap-px overflow-hidden border border-[var(--ret-border)] bg-[var(--ret-border)]">
 						{step.bullets.map(([prefix, highlight, suffix], bi) => (
 							<li
 								key={bi}
-								className="flex items-start gap-2.5 text-[13px] leading-relaxed text-[var(--ret-text)]"
+								className="grid grid-cols-[34px_minmax(0,1fr)] gap-3 bg-[var(--ret-bg)] px-3 py-3 text-[12px] leading-relaxed text-[var(--ret-text)]"
 							>
-								<span className="mt-px shrink-0 font-semibold text-[var(--ret-purple)]">
-									→→
+								<span className="font-mono text-[10px] text-[var(--ret-text-muted)]">
+									{String(bi + 1).padStart(2, "0")}
 								</span>
 								<span>
 									{prefix}
-									<code className="rounded bg-[var(--ret-surface)] px-1.5 py-0.5 text-[12px] font-medium text-[var(--ret-purple)]">
+									<code className="bg-[var(--ret-surface)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--ret-text)]">
 										{highlight}
 									</code>
 									{suffix}
@@ -209,17 +262,21 @@ function WorkflowRow({ step, index }: { step: Step; index: number }) {
 				</div>
 
 				{step.poweredBy.length > 0 && (
-					<div className="mt-8 flex items-center gap-2.5 pt-2">
+					<div className="mt-8 flex flex-wrap items-center gap-2.5 pt-2">
 						<span className="text-[11px] text-[var(--ret-text-muted)]">
-							Powered by
+							Backed by
 						</span>
 						{step.poweredBy.map((p) => (
 							<span
 								key={p.name}
-								className="inline-flex items-center gap-1.5 rounded-full bg-[var(--ret-surface)] px-2.5 py-1"
+								className="inline-flex min-h-8 items-center gap-1.5 border border-[var(--ret-border)] bg-[var(--ret-surface)] px-2.5 py-1"
 							>
 								{p.kind === "logo" ? (
-									<Logo mark={p.mark} size={14} />
+									<Logo
+										mark={p.mark}
+										size={14}
+										tone={p.mark === "nous" || p.mark === "openclaw" ? "native" : undefined}
+									/>
 								) : (
 									<ServiceIcon slug={p.slug} size={14} tone="color" />
 								)}
@@ -232,25 +289,86 @@ function WorkflowRow({ step, index }: { step: Step; index: number }) {
 				)}
 			</div>
 
-			{/* Circuit-art hero + docked terminal */}
-			<div className="relative flex min-h-[420px] flex-col overflow-hidden border-l border-[var(--ret-border)] bg-[#09090b] md:min-h-0">
-				<div className="relative min-h-[170px] flex-1 overflow-hidden">
-					{/* eslint-disable-next-line @next/next/no-img-element -- local white-on-black schematic, shown as the column's hero visual */}
-					<img
-						src={`/category-art/${STEP_ART[index]}.png`}
-						alt=""
-						aria-hidden="true"
-						className="pointer-events-none absolute inset-0 h-full w-full select-none object-cover opacity-80 [mask-image:linear-gradient(to_bottom,black,black_72%,transparent)] [-webkit-mask-image:linear-gradient(to_bottom,black,black_72%,transparent)]"
-					/>
-					<span className="absolute left-4 top-4 font-mono text-[10px] uppercase tracking-[0.2em] text-white/45 md:left-5 md:top-5">
-						{step.tab}
-					</span>
-				</div>
-				<div className="relative z-10 mx-3 mb-3 overflow-hidden rounded-xl border border-white/[0.1] bg-[#0d0d12]/90 backdrop-blur-md md:mx-5 md:mb-5">
-					<div className="p-4 md:p-5">
-						<StepTerminal index={index} />
+			{/* Circuit diagram + concrete readout */}
+			<div className="grid min-h-[620px] gap-px border-l border-[var(--ret-border)] bg-[var(--ret-border)] md:min-h-0 lg:grid-rows-[minmax(330px,0.48fr)_minmax(360px,0.52fr)]">
+				<div className="grid gap-px bg-[var(--ret-border)] lg:grid-cols-[minmax(300px,0.42fr)_minmax(0,0.58fr)]">
+					<div className="group relative min-h-[300px] overflow-hidden bg-[var(--ret-bg)]">
+						<div
+							className="ret-circuit-texture pointer-events-none absolute inset-0 opacity-[0.22] mix-blend-multiply invert dark:opacity-[0.34] dark:mix-blend-screen dark:invert-0"
+							style={{ "--ret-circuit-size": "420px 560px" } as CircuitStyle}
+						/>
+						<div
+							className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_58%_42%,transparent_0,transparent_42%,var(--ret-bg)_88%)] opacity-70"
+							aria-hidden="true"
+						/>
+						<div className="relative z-10 flex h-full flex-col justify-between p-4 md:p-6">
+							<div className="flex items-center justify-between gap-3">
+								<span className="font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--ret-text-muted)]">
+									stage {step.stage}
+								</span>
+								<step.Icon className="h-6 w-6 text-[var(--ret-text-muted)]" />
+							</div>
+							<div className="grid grid-cols-3 gap-px border border-[var(--ret-border)] bg-[var(--ret-border)]">
+								{step.metrics.map(([label, value]) => (
+									<div key={label} className="bg-[var(--ret-bg)]/90 px-3 py-3 backdrop-blur-sm">
+										<div className="font-mono text-[8px] uppercase tracking-[0.18em] text-[var(--ret-text-muted)]">
+											{label}
+										</div>
+										<div className="mt-1 truncate text-[12px] font-semibold text-[var(--ret-text)]">
+											{value}
+										</div>
+									</div>
+								))}
+							</div>
+						</div>
+					</div>
+					<div className="bg-[var(--ret-bg)] p-4 md:p-6">
+						<div className="grid h-full gap-px border border-[var(--ret-border)] bg-[var(--ret-border)]">
+							<div className="flex items-center justify-between bg-[var(--ret-bg)] px-3 py-2">
+								<span className="font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--ret-text-muted)]">
+									worker recipe
+								</span>
+								<span className="font-mono text-[10px] text-[var(--ret-text-muted)]">
+									{step.tab}
+								</span>
+							</div>
+							{step.metrics.map(([label, value, hint]) => (
+								<div
+									key={label}
+									className="grid grid-cols-[128px_minmax(0,1fr)_minmax(110px,0.42fr)] items-center bg-[var(--ret-bg)] px-4 py-4 text-[13px]"
+								>
+									<span className="font-mono uppercase tracking-[0.14em] text-[var(--ret-text-muted)]">
+										{label}
+									</span>
+									<span className="font-medium text-[var(--ret-text)]">{value}</span>
+									<span className="truncate text-right text-[var(--ret-text-dim)]">
+										{hint}
+									</span>
+								</div>
+							))}
+						</div>
 					</div>
 				</div>
+				<div className="bg-[var(--ret-bg)] p-4 md:p-6">
+					<div className="h-full min-h-[330px] overflow-hidden border border-[var(--ret-border)] bg-[#0d0d12] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+						<div className="h-full p-4 md:p-6">
+							<StepTerminal index={index} />
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	);
+}
+
+function WorkflowPillar({ label, value }: { label: string; value: string }) {
+	return (
+		<div className="flex min-h-[128px] flex-col justify-end bg-[var(--ret-bg)] p-4 md:p-5">
+			<div className="font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--ret-text-muted)]">
+				{label}
+			</div>
+			<div className="mt-2 text-[16px] font-semibold tracking-tight text-[var(--ret-text)]">
+				{value}
 			</div>
 		</div>
 	);
@@ -312,10 +430,10 @@ function AgentTerminal() {
 				cols={["Claude Code", "task-driven", "coding + SDK"]}
 			/>
 			<TTableRow
-				cols={["Codex CLI", "task-driven", "sandbox + exec"]}
+				cols={["Codex CLI", "task-driven", "sandbox + command"]}
 			/>
 			<TSpacer />
-			<TLine success>✓ 2 autonomous drivers active</TLine>
+			<TLine success>✓ Runtime lanes ready</TLine>
 		</TerminalShell>
 	);
 }
@@ -328,7 +446,7 @@ function ToolsTerminal() {
 			<TRow label="Built-ins" value={`${HARNESS.rigToolSurfaceCount} tools`} />
 			<TRow label="Skills" value={`${HARNESS.skillCount} synced`} />
 			<TRow label="MCP servers" value={`${HARNESS.mcpServerCount} catalog entries`} />
-			<TRow label="Services" value={`${HARNESS.serviceRouteCount} routes`} />
+			<TRow label="Services" value={`${HARNESS.serviceRouteCount} lanes`} />
 			<TSpacer />
 			<TLine dim>
 				Categories: frontend · security · research · design · ops ·
@@ -343,12 +461,13 @@ function ToolsTerminal() {
 function ProvidersTerminal() {
 	return (
 		<TerminalShell command="am substrate list">
-			<TLine dim>3 substrate lanes configured</TLine>
+			<TLine dim>4 substrate lanes configured</TLine>
 			<TSpacer />
 			<THeader cols={["Lane", "Type", "Status"]} />
 			<TTableRow cols={["e2b", "sandbox", "● active"]} accent={[false, false, true]} />
 			<TTableRow cols={["sprites", "persistent", "○ standby"]} />
 			<TTableRow cols={["dedalus", "persistent", "○ standby"]} />
+			<TTableRow cols={["vercel", "persistent", "○ standby"]} />
 			<TSpacer />
 			<TLine dim>Filesystem:</TLine>
 			<TLine>{"  "}~/.agent-machines/{"    "}runtime state</TLine>
@@ -413,12 +532,12 @@ function TerminalShell({
 	children: React.ReactNode;
 }) {
 	return (
-		<div className="flex h-full flex-col font-mono text-[11px] leading-[1.8] md:text-[12px]">
+		<div className="flex h-full flex-col font-mono text-[12px] leading-[1.85] md:text-[13px]">
 			<div className="flex items-center gap-2 border-b border-white/[0.06] pb-3">
 				<span className="text-white/35">$</span>
 				<span className="font-medium text-white/80">{command}</span>
 			</div>
-			<div className="mt-3 flex-1 space-y-0.5 overflow-auto">
+			<div className="mt-4 flex-1 space-y-0.5 overflow-auto">
 				{children}
 			</div>
 		</div>
@@ -438,7 +557,7 @@ function TLine({
 		<div
 			className={cn(
 				dim && "text-white/35",
-				success && "text-emerald-400",
+				success && "text-white/80",
 				!dim && !success && "text-white/65",
 			)}
 		>
@@ -458,8 +577,8 @@ function TRow({
 }) {
 	return (
 		<div className="flex gap-2">
-			<span className="w-28 shrink-0 text-white/35">{label}</span>
-			<span className={success ? "text-emerald-400" : "text-white/70"}>
+			<span className="w-32 shrink-0 text-white/35">{label}</span>
+			<span className={success ? "text-white/80" : "text-white/70"}>
 				{value}
 			</span>
 		</div>
@@ -492,7 +611,7 @@ function TTableRow({
 					key={i}
 					className={cn(
 						"flex-1",
-						accent?.[i] && "text-emerald-400",
+						accent?.[i] && "text-white/80",
 					)}
 				>
 					{c}

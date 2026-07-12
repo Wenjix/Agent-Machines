@@ -30,12 +30,12 @@ const PARTNER_HUE: Record<PartnerKey, string> = {
 	cursor: "#f5c542",
 	openclaw: "#e87c4f",
 	anthropic: "#d4a574",
-	openai: "#4ae0a0",
+	openai: "#a1a1aa",
 	e2b: "#FF8800",
 	sprites: "#7C3AED",
 	vercel: "#ffffff",
 	"claude-code": "#d4a574",
-	codex: "#4ae0a0",
+	codex: "#a1a1aa",
 };
 
 const PARTNER_LABEL: Record<PartnerKey, string> = {
@@ -53,18 +53,30 @@ const PARTNER_LABEL: Record<PartnerKey, string> = {
 	codex: "codex cli",
 };
 
-const LOGO_PARTNERS = new Set<PartnerKey>(["dedalus", "nous", "cursor", "openclaw"]);
+const LOGO_PARTNERS = new Set<PartnerKey>([
+	"dedalus",
+	"nous",
+	"cursor",
+	"openclaw",
+	"claude-code",
+	"codex",
+]);
 const LOGO_MARK: Partial<Record<PartnerKey, Mark>> = {
 	dedalus: "dedalus",
 	am: "am",
 	nous: "nous",
 	cursor: "cursor",
 	openclaw: "openclaw",
+	"claude-code": "claudecode",
+	codex: "codex",
 };
-const SERVICE_PARTNER: Record<string, ServiceSlug> = {
-	"claude-code": "anthropic",
-	codex: "openai",
-};
+const SERVICE_PARTNER: Record<string, ServiceSlug> = {};
+const COLOR_LOGO_PARTNERS = new Set<PartnerKey>([
+	"nous",
+	"openclaw",
+	"claude-code",
+	"codex",
+]);
 
 const ALL_PARTNERS: ReadonlyArray<PartnerKey> = [
 	"dedalus",
@@ -91,7 +103,13 @@ const KIND_LABEL: Record<ContributionEvent["kind"], string> = {
 
 function PartnerIcon({ partner, size }: { partner: PartnerKey; size: number }) {
 	if (LOGO_PARTNERS.has(partner)) {
-		return <Logo mark={LOGO_MARK[partner]!} size={size} />;
+		return (
+			<Logo
+				mark={LOGO_MARK[partner]!}
+				size={size}
+				tone={COLOR_LOGO_PARTNERS.has(partner) ? "native" : undefined}
+			/>
+		);
 	}
 	const slug = SERVICE_PARTNER[partner];
 	if (slug) return <ServiceIcon slug={slug} size={size} />;
@@ -122,7 +140,7 @@ function BrandChip({
 			onClick={onClick}
 			aria-pressed={active}
 			className={cn(
-				"group flex items-center gap-1 border px-1.5 py-0.5 text-[10px] transition-all",
+				"ret-pressable group flex min-h-8 items-center gap-1 border px-1.5 py-0.5 text-[10px]",
 				active
 					? "border-[var(--ret-purple)]/55 bg-[var(--ret-purple-glow)] text-[var(--ret-purple)] shadow-[0_0_10px_var(--ret-purple-glow)]"
 					: "border-dashed border-[var(--ret-border)] bg-[var(--ret-bg-soft)] text-[var(--ret-text-dim)] hover:border-solid hover:border-[var(--ret-purple)]/45 hover:text-[var(--ret-text)]",
@@ -152,7 +170,13 @@ function BrandChip({
 function EventRow({ event }: { event: ContributionEvent }) {
 	function icon(): React.ReactNode {
 		if (event.brand && PARTNER_MARKS.has(event.brand as Mark)) {
-			return <Logo mark={event.brand as Mark} size={12} />;
+			return (
+				<Logo
+					mark={event.brand as Mark}
+					size={12}
+					tone={COLOR_LOGO_PARTNERS.has(event.brand as PartnerKey) ? "native" : undefined}
+				/>
+			);
 		}
 		if (event.brand && isServiceSlug(event.brand)) {
 			return <ServiceIcon slug={event.brand} size={12} />;
@@ -256,7 +280,7 @@ function PartnerSwatch({
 			onClick={onClick}
 			aria-pressed={active}
 			className={cn(
-				"group flex items-center gap-2 border px-2 py-1 text-[10px] uppercase tracking-[0.18em] transition-all",
+				"ret-pressable group flex min-h-8 items-center gap-2 border px-2 py-1 text-[10px] uppercase tracking-[0.18em]",
 				active
 					? "border-[var(--ret-purple)]/55 bg-[var(--ret-purple-glow)] text-[var(--ret-purple)] shadow-[0_0_12px_var(--ret-purple-glow)]"
 					: "border-dashed border-[var(--ret-border)] text-[var(--ret-text-dim)] hover:border-solid hover:border-[var(--ret-purple)]/50 hover:bg-[var(--ret-surface)] hover:text-[var(--ret-text)]",
