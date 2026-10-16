@@ -296,3 +296,11 @@ agent-machines.dev."
 **Web:** Restored the footer PCB art at a footer-only path (`.ret-circuit-texture` is shared by five components, so reverting the shared asset would have changed the hero, navbar and workflow surfaces). Remounted `StatsRow` and rewrote it around the real `createMux` API -- the previous snippet's lowercase `am` alias would have thrown at runtime and its `persistent` field was dropped before the wire (now transmitted). Added a two-plane diagram and a dashboard sandbox-router panel whose capability mirror is drift-tested against `src/mux`.
 
 **Verification:** 83 mux tests, 3 SDK tests, 16 new web tests; root and web typecheck clean; live matrix green for claude-code/codex/openclaw on e2b and sprites. One pre-existing web test failure (`matchPackages` memory case) is unrelated and left untouched.
+
+## [2026-10-16] feat/analytics | GA4 on public pages, 48px favicon
+
+**Changed:** `web/components/GoogleAnalytics.tsx` loads GA4 (`G-8FXWW4E2G5`, constant in `web/lib/analytics.ts`) from the root layout only when `VERCEL_ENV === "production"`. Consent Mode v2 defaults run before gtag.js: ad storage denied everywhere, analytics cookies denied in the EEA/UK/CH (cookieless pings). The privacy page has an "analytics" section. `favicon.ico` (app/ and public/) was regenerated from `app/icon.png` with 16/32/48px entries; it had no 48px entry, which Google's favicon guideline needs.
+
+**Decision:** `/dashboard`, `/onboarding` and `/sign-in` never send analytics. gtag.js is not loaded when a visit starts there, and `web/instrumentation-client.ts` sets GA's `ga-disable-<id>` flag from `onRouterTransitionStart`, which runs before the URL changes, so a client navigation into those routes sends nothing. The existing CSP (`frame-ancestors`, `object-src`, `base-uri`) does not restrict scripts or connections, so it needed no GA origins.
+
+**Verification:** web typecheck clean; `lib/analytics.test.ts` covers the tracked/untracked path split.

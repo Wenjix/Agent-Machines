@@ -4,6 +4,7 @@ import localFont from "next/font/local";
 import { Instrument_Serif } from "next/font/google";
 import type { ReactNode } from "react";
 
+import { GoogleAnalytics } from "@/components/GoogleAnalytics";
 import { SITE, TITLE_SEPARATOR } from "@/lib/seo/config";
 import { buildRootJsonLd } from "@/lib/seo/json-ld";
 import { DEFAULT_OG_IMAGE, DEFAULT_TWITTER_IMAGE } from "@/lib/seo/metadata";
@@ -157,6 +158,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
 				{children}
 				<div className="ret-grain" aria-hidden="true" />
 				<Analytics />
+				{process.env.VERCEL_ENV === "production" ? <GoogleAnalytics /> : null}
 			</body>
 		</html>
 	);

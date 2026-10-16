@@ -91,6 +91,23 @@ export default function PrivacyPage() {
 					</DocList>
 				</DocSection>
 
+				<DocSection title="analytics">
+					<p>
+						On public pages, Google Analytics 4 measures visits (pages, device,
+						approximate location) to see what people use. The dashboard,
+						onboarding, and sign-in pages are not measured. It is not used for
+						ads or ad personalisation. Visitors in the EEA, UK and Switzerland
+						are measured without analytics cookies (Consent Mode). Opt out with{" "}
+						<a
+							href="https://tools.google.com/dlpage/gaoptout"
+							className="text-[var(--ret-purple)] hover:underline"
+						>
+							Google&rsquo;s opt-out add-on
+						</a>
+						.
+					</p>
+				</DocSection>
+
 				<DocSection title="sharing">
 					<p>
 						Agent Machines does not sell personal data. Data is shared with
